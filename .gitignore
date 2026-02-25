@@ -1,0 +1,10 @@
+# .gitignore に追記
+.next/
+.next
+
+./frontend/.next
+
+./backend/.next
+
+./backend/.env.env
+backend/.env
