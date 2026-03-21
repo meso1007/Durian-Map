@@ -6,7 +6,9 @@
 
 ./backend/.next
 
-./backend/.env.env
+# 環境変数（秘密をコミットしない）
 backend/.env
-./backend/.env
-
+frontend/.env.local
+.env
+.env.local
+.env*.local
