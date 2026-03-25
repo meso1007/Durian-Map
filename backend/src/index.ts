@@ -15,6 +15,10 @@ type Place = {
   primaryType: string;
   websiteUri?: string;
   location?: { latitude: number; longitude: number };
+  rating?: number;
+  userRatingCount?: number;
+  regularOpeningHours?: { openNow: boolean };
+  photos?: Array<{ name: string }>;
 }
 
 // --- チェーン店ブロックリスト（全国30店舗以上が基準）---
@@ -65,6 +69,17 @@ const chainCafeNames = [
   'やなか珈琲',
   'パンとエスプレッソと',
   '猫カフェmocha', 'cat cafe mocha',
+  'ブルーボトルコーヒー', 'blue bottle',
+  '猿田彦珈琲', 'sarutahiko',
+  '丸山珈琲', 'maruyamacoffee',
+  '元町珈琲', 'motomachi coffee',
+  'カフェラミル', 'cafe la mille',
+  '喫茶店ピノキオ', 'cafe pinokio',
+  'ビリオン珈琲', 'あずさ珈琲',
+  'ワイアードカフェ', 'wired cafe',
+  'カフェコムサ', 'cafe comme ca',
+  'キャピタルコーヒー', 'capital coffee',
+
 
   // ファストフード・コンビニ系（カフェ需要で検索にヒットする場合）
   'マクドナルド', 'mcdonald',
@@ -73,6 +88,12 @@ const chainCafeNames = [
   'セブン-イレブン', 'セブンイレブン', '7-eleven',
   'ファミリーマート', 'familymart',
   'ローソン', 'lawson',
+  'サブウェイ', 'subway',
+  'フレッシュネスバーガー', 'freshness burger',
+  'ロッテリア', 'lotteria',
+  'バーガーキング', 'burger king',
+  'ウェンディーズ', "wendy's",
+  'サーティワン', 'baskin robbins',
 ]
 
 // ウェブサイトのドメインで判定するリスト
@@ -115,6 +136,17 @@ const chainCafeDomains = [
   'yanaka-coffee.co.jp',
   'bread-espresso.jp',
   'catmocha.jp',
+  'bluebottlecoffee.jp',
+  'sarutahiko.jp',
+  'maruyamacoffee.com',
+  'motomachi-coffee.jp',
+  'cafe-la-mille.com',
+  'cafe-pinokio.com',
+  'birioncoffee.com',
+  'azusacoffee.com',
+  'cafecompany.co.jp',      // ワイアードカフェ
+  'cafe-commeca.co.jp',
+  'capital-coffee.co.jp',
 
   // ファストフード・コンビニ
   'mcdonalds.co.jp',
@@ -123,6 +155,12 @@ const chainCafeDomains = [
   'sej.co.jp',
   'family.co.jp',
   'lawson.co.jp',
+  'subway.co.jp',
+  'freshnessburger.co.jp',
+  'lotteria.jp',
+  'burgerking.co.jp',
+  'wendys.co.jp',
+  '31ice.co.jp',
 ]
 
 app.get('/api/search', async (c) => {
@@ -149,7 +187,7 @@ app.get('/api/search', async (c) => {
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.primaryType,places.websiteUri,places.location'
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.primaryType,places.websiteUri,places.location,places.rating,places.userRatingCount,places.regularOpeningHours,places.photos'
       },
       body: JSON.stringify({ textQuery: query })
     })
@@ -168,6 +206,10 @@ app.get('/api/search', async (c) => {
           websiteUri: place.websiteUri,
           lat: place.location?.latitude,
           lng: place.location?.longitude,
+          rating: place.rating,
+          userRatingCount: place.userRatingCount,
+          openNow: place.regularOpeningHours?.openNow,
+          photoName: place.photos?.[0]?.name,
         })
       }
       return acc

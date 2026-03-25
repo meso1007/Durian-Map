@@ -1,0 +1,13 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="shadow-selected" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#FFEB5C" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+  <!-- Main Pin -->
+  <path filter="url(#shadow-selected)" d="M32 2 C15.4 2 2 15.4 2 32 C2 50.5 32 64 32 64 C32 64 62 50.5 62 32 C62 15.4 48.6 2 32 2 Z" fill="#FFEB5C"/>
+  <!-- Inner Circle -->
+  <circle cx="32" cy="28" r="16" fill="#1A1810"/>
+  <!-- Coffee Cup -->
+  <path d="M24 22 H36 V30 C36 32.8 33.8 35 31 35 H29 C26.2 35 24 32.8 24 30 V22 Z M36 24 H39 C40.7 24 42 25.3 42 27 C42 28.7 40.7 30 39 30 H36" stroke="#FFEB5C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

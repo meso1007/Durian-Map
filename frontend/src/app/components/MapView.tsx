@@ -59,10 +59,10 @@ const MAP_STYLE = [
 
 // ---- マーカー画像の設定 ----
 // frontend/public/ に画像を置いて、パスをここで変更するだけで差し替え可能
-const MARKER_ICON = '/marker.png';          // 通常時
-const MARKER_ICON_SELECTED = '/marker-selected.png'; // 選択時（同じ画像でも可）
-const MARKER_SIZE = 36;           // 通常サイズ (px)
-const MARKER_SIZE_SELECTED = 46; // 選択時サイズ (px)
+const MARKER_ICON = '/marker.svg';          // 通常時
+const MARKER_ICON_SELECTED = '/marker-selected.svg'; // 選択時
+const MARKER_SIZE = 40;           // 通常サイズ (px)
+const MARKER_SIZE_SELECTED = 52; // 選択時サイズ (px)
 // --------------------------
 
 // マップのパン・フィット制御
