@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import dynamic from 'next/dynamic';
+import { useSearchParams } from 'next/navigation';
 
 // SSR無効でMapViewを読み込む（Leafletはブラウザ専用ではないが、Google Mapsと合わせて一応）
 const MapView = dynamic(() => import('./components/MapView'), { ssr: false });
@@ -33,8 +34,9 @@ const getAreaFromCoords = async (lat: number, lon: number): Promise<string> => {
   return addr.city || addr.town || addr.village || addr.suburb || addr.county || '';
 };
 
-// --- メインコンポーネント ---
-export default function CafeFinder() {
+// --- メインコンポーネント (コンテンツ部) ---
+function CafeFinderContent() {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<'search' | 'saved'>('search');
   const [area, setArea] = useState('');
   const [isLocating, setIsLocating] = useState(false);
@@ -73,7 +75,7 @@ export default function CafeFinder() {
     }
   }, [errorMsg]);
 
-  const search = async (searchArea: string) => {
+  const search = useCallback(async (searchArea: string) => {
     if (!searchArea) return;
     setIsLoading(true);
     setResults([]);
@@ -84,7 +86,26 @@ export default function CafeFinder() {
     if (error) setErrorMsg(error);
     setResults(data);
     setIsLoading(false);
-  };
+  }, []);
+
+  // URLパラメータからの初期ロード処理
+  useEffect(() => {
+    const defaultArea = searchParams.get('area');
+    const defaultCafeId = searchParams.get('cafeId');
+
+    if (defaultArea && !hasSearched) {
+      setArea(defaultArea);
+      search(defaultArea).then(() => {
+        if (defaultCafeId) {
+          setSelectedId(defaultCafeId);
+          setTimeout(() => {
+            listRef.current?.querySelector(`[data-id="${defaultCafeId}"]`)
+              ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 300);
+        }
+      });
+    }
+  }, [searchParams, search, hasSearched]);
 
   const handleLocate = () => {
     if (!navigator.geolocation) {
@@ -270,6 +291,7 @@ export default function CafeFinder() {
                     <CafeCard
                       key={cafe.id}
                       cafe={cafe}
+                      area={area}
                       isSelected={cafe.id === selectedId}
                       isSaved={savedCafes.some(c => c.id === cafe.id)}
                       onSelect={() => handleSelectCafe(cafe.id)}
@@ -301,16 +323,26 @@ export default function CafeFinder() {
   );
 }
 
+// --- メインコンポーネントのラッパー ---
+export default function CafeFinder() {
+  return (
+    <Suspense fallback={<div className="h-[100dvh] w-full bg-[#FAF8F5] flex items-center justify-center">Loading...</div>}>
+      <CafeFinderContent />
+    </Suspense>
+  );
+}
+
 // --- カフェカードコンポーネント ---
 type CafeCardProps = {
   cafe: any;
+  area: string;
   isSelected: boolean;
   isSaved: boolean;
   onSelect: () => void;
   onToggleSave: () => void;
 };
 
-function CafeCard({ cafe, isSelected, isSaved, onSelect, onToggleSave }: CafeCardProps) {
+function CafeCard({ cafe, area, isSelected, isSaved, onSelect, onToggleSave }: CafeCardProps) {
   const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cafe.name)}&query_place_id=${cafe.id}`;
 
   const domain = (() => {
@@ -322,18 +354,22 @@ function CafeCard({ cafe, isSelected, isSaved, onSelect, onToggleSave }: CafeCar
     ? `https://places.googleapis.com/v1/${cafe.photoName}/media?maxHeightPx=200&maxWidthPx=200&key=${apiKey}`
     : null;
 
+  const shareUrl = typeof window !== 'undefined' && area
+    ? `${window.location.origin}/?area=${encodeURIComponent(area)}&cafeId=${cafe.id}`
+    : mapUrl;
+
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (navigator.share) {
       try {
         await navigator.share({
           title: cafe.name,
-          url: mapUrl
+          url: shareUrl
         });
       } catch (err) { }
     } else {
-      navigator.clipboard.writeText(mapUrl);
-      alert('マップURLをコピーしました！');
+      navigator.clipboard.writeText(shareUrl);
+      alert('URLをコピーしました！');
     }
   };
 
