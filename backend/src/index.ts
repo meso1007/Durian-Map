@@ -163,12 +163,26 @@ const chainCafeDomains = [
   '31ice.co.jp',
 ]
 
+// --- APIキャッシュ設定 ---
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+}
+const searchCache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 1000 * 60 * 60 * 24; // 24時間キャッシュ
+
 app.get('/api/search', async (c) => {
   const area = c.req.query('area')
   const category = c.req.query('category')
 
   if (!area || !category) {
     return c.json({ error: 'Area and category are required' }, 400)
+  }
+
+  const cacheKey = `${area}-${category}`
+  const cached = searchCache.get(cacheKey)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return c.json({ leads: cached.data })
   }
 
   const apiKey = Bun.env.GOOGLE_API_KEY
@@ -214,6 +228,9 @@ app.get('/api/search', async (c) => {
       }
       return acc
     }, [])
+
+    // 検索結果をキャッシュに保存
+    searchCache.set(cacheKey, { data: leads, timestamp: Date.now() })
 
     return c.json({ leads })
 
