@@ -9,9 +9,8 @@ const MapView = dynamic(() => import('./components/MapView'), { ssr: false });
 // --- データ取得 ---
 const fetchCafes = async (area: string) => {
   try {
-    const apiUrlBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
     const response = await fetch(
-      `${apiUrlBase}/api/search?area=${encodeURIComponent(area)}&category=カフェ`
+      `/api/search?area=${encodeURIComponent(area)}&category=カフェ`
     );
     if (!response.ok) throw new Error('API request failed');
     const data = await response.json();
