@@ -170,16 +170,53 @@ interface CacheEntry {
 }
 const searchCache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24; // 24時間キャッシュ
+const DEFAULT_NEARBY_RADIUS_METERS = 1500;
+
+function getNearbySearchTypes(category: string): string[] | null {
+  switch (category) {
+    case 'カフェ':
+      return ['cafe', 'coffee_shop'];
+    default:
+      return null;
+  }
+}
 
 app.get('/api/search', async (c) => {
   const area = c.req.query('area')
   const category = c.req.query('category')
+  const latParam = c.req.query('lat')
+  const lngParam = c.req.query('lng')
+  const radiusParam = c.req.query('radius')
 
-  if (!area || !category) {
-    return c.json({ error: 'Area and category are required' }, 400)
+  const lat = latParam ? Number(latParam) : null
+  const lng = lngParam ? Number(lngParam) : null
+  const radius = radiusParam ? Number(radiusParam) : DEFAULT_NEARBY_RADIUS_METERS
+  const hasCoordinates = lat != null && lng != null
+
+  if (!category) {
+    return c.json({ error: 'Category is required' }, 400)
   }
 
-  const cacheKey = `${area}-${category}`
+  if (!hasCoordinates && !area) {
+    return c.json({ error: 'Area or coordinates are required' }, 400)
+  }
+
+  if (hasCoordinates && (
+    Number.isNaN(lat) ||
+    Number.isNaN(lng) ||
+    Number.isNaN(radius) ||
+    lat < -90 ||
+    lat > 90 ||
+    lng < -180 ||
+    lng > 180 ||
+    radius <= 0
+  )) {
+    return c.json({ error: 'Invalid coordinates or radius' }, 400)
+  }
+
+  const cacheKey = hasCoordinates
+    ? `nearby-${category}-${lat!.toFixed(4)}-${lng!.toFixed(4)}-${Math.round(radius)}`
+    : `${area}-${category}`
   const cached = searchCache.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return c.json({ leads: cached.data })
@@ -192,8 +229,33 @@ app.get('/api/search', async (c) => {
     return c.json({ error: 'Server configuration error' }, 500)
   }
 
-  const query = `${area} ${category}`
-  const apiUrl = 'https://places.googleapis.com/v1/places:searchText'
+  const nearbyTypes = hasCoordinates ? getNearbySearchTypes(category) : null
+  const apiUrl = hasCoordinates && nearbyTypes
+    ? 'https://places.googleapis.com/v1/places:searchNearby'
+    : 'https://places.googleapis.com/v1/places:searchText'
+
+  const requestBody = hasCoordinates && nearbyTypes
+    ? {
+      includedTypes: nearbyTypes,
+      maxResultCount: 20,
+      rankPreference: 'DISTANCE',
+      languageCode: 'ja',
+      regionCode: 'JP',
+      locationRestriction: {
+        circle: {
+          center: {
+            latitude: lat,
+            longitude: lng,
+          },
+          radius,
+        },
+      },
+    }
+    : {
+      textQuery: `${area} ${category}`,
+      languageCode: 'ja',
+      regionCode: 'JP',
+    }
 
   try {
     const response = await fetch(apiUrl, {
@@ -203,7 +265,7 @@ app.get('/api/search', async (c) => {
         'X-Goog-Api-Key': apiKey,
         'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.primaryType,places.websiteUri,places.location,places.rating,places.userRatingCount,places.regularOpeningHours,places.photos'
       },
-      body: JSON.stringify({ textQuery: query })
+      body: JSON.stringify(requestBody)
     })
 
     const data = await response.json()
