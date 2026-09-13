@@ -5,8 +5,10 @@ import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 
-// SSR無効でMapViewを読み込む（Leafletはブラウザ専用ではないが、Google Mapsと合わせて一応）
-const MapView = dynamic(() => import('./components/MapView'), { ssr: false });
+const MapView = dynamic(() => import('./components/MapView'), {
+  ssr: false,
+  loading: () => <div className="h-full w-full bg-[#182015]" aria-hidden />,
+});
 
 type Cafe = {
   id: string;
@@ -110,18 +112,7 @@ function CafeFinderContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<Cafe[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
-  const [savedCafes, setSavedCafes] = useState<Cafe[]>(() => {
-    if (typeof window === 'undefined') {
-      return [];
-    }
-
-    try {
-      const stored = localStorage.getItem('saved_cafes');
-      return stored ? JSON.parse(stored) as Cafe[] : [];
-    } catch {
-      return [];
-    }
-  });
+  const [savedCafes, setSavedCafes] = useState<Cafe[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectionSource, setSelectionSource] = useState<'map' | 'list' | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -175,6 +166,22 @@ function CafeFinderContent() {
       return () => clearTimeout(timer);
     }
   }, [errorMsg]);
+
+  // 保存済みカフェをマウント後にlocalStorageから復元（SSRとのハイドレーション不一致を防ぐ）
+  useEffect(() => {
+    const loadSaved = async () => {
+      try {
+        const stored = localStorage.getItem('saved_cafes');
+        if (stored) {
+          setSavedCafes(JSON.parse(stored) as Cafe[]);
+        }
+      } catch {
+        // 壊れたデータは無視
+      }
+    };
+
+    void loadSaved();
+  }, []);
 
   const syncAreaFromCoords = useCallback(async (coords: Coordinates, replaceCurrentValue: boolean) => {
     try {
@@ -561,12 +568,12 @@ function CafeCard({ cafe, area, isSelected, isSaved, onSelect, onToggleSave }: C
   const domain = getCafeDomain(cafe);
   const photoUrl = getCafePhotoUrl(cafe);
 
-  const shareUrl = typeof window !== 'undefined' && area
-    ? `${window.location.origin}/?area=${encodeURIComponent(area)}&cafeId=${cafe.id}`
-    : mapUrl;
-
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    const shareUrl = area
+      ? `${window.location.origin}/?area=${encodeURIComponent(area)}&cafeId=${cafe.id}`
+      : mapUrl;
+
     if (navigator.share) {
       try {
         await navigator.share({

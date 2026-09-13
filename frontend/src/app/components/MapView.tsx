@@ -132,11 +132,11 @@ function MapController({
     }
 
     const bounds = new google.maps.LatLngBounds();
-    if (emphasizeCurrentLocation && currentLocation) {
+    if (currentLocation) {
       bounds.extend(currentLocation);
     }
     validCafes.forEach((cafe) => bounds.extend({ lat: cafe.lat!, lng: cafe.lng! }));
-    map.fitBounds(bounds, 72);
+    map.fitBounds(bounds, emphasizeCurrentLocation && currentLocation ? 96 : 72);
   }, [cafes, selectedId, currentLocation, emphasizeCurrentLocation, map]);
 
   return null;
@@ -322,12 +322,22 @@ export default function MapView({
   onClearSelection,
 }: Props) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
+  const defaultCenter = currentLocation ?? { lat: 35.6762, lng: 139.6503 };
+  const defaultZoom = currentLocation ? 15 : 12;
+
+  if (!apiKey) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-[#182015] px-6 text-center text-sm text-[#76866a]">
+        マップを表示するには NEXT_PUBLIC_GOOGLE_MAPS_API_KEY を設定してください。
+      </div>
+    );
+  }
 
   return (
     <APIProvider apiKey={apiKey}>
       <Map
-        defaultCenter={{ lat: 35.6762, lng: 139.6503 }}
-        defaultZoom={12}
+        defaultCenter={defaultCenter}
+        defaultZoom={defaultZoom}
         styles={MAP_STYLE}
         disableDefaultUI
         zoomControl={false}
