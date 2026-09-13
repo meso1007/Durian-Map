@@ -1,13 +1,11 @@
 <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <filter id="shadow-selected" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#FFEB5C" flood-opacity="0.6"/>
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#D4F07A" flood-opacity="0.7"/>
     </filter>
   </defs>
-  <!-- Main Pin -->
-  <path filter="url(#shadow-selected)" d="M32 2 C15.4 2 2 15.4 2 32 C2 50.5 32 64 32 64 C32 64 62 50.5 62 32 C62 15.4 48.6 2 32 2 Z" fill="#FFEB5C"/>
-  <!-- Inner Circle -->
-  <circle cx="32" cy="28" r="16" fill="#1A1810"/>
-  <!-- Coffee Cup -->
-  <path d="M24 22 H36 V30 C36 32.8 33.8 35 31 35 H29 C26.2 35 24 32.8 24 30 V22 Z M36 24 H39 C40.7 24 42 25.3 42 27 C42 28.7 40.7 30 39 30 H36" stroke="#FFEB5C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path filter="url(#shadow-selected)" d="M32 2 C15.4 2 2 15.4 2 32 C2 50.5 32 64 32 64 C32 64 62 50.5 62 32 C62 15.4 48.6 2 32 2 Z" fill="#F4D964"/>
+  <circle cx="32" cy="28" r="16" fill="#274017"/>
+  <path d="M30.5 14C30.5 12.5 31.7 11.2 33.3 11.2H35.1V15.8H29.7L30.5 14Z" fill="#FFF8D5"/>
+  <path d="M32 15.8L35.4 18.8L39.8 18L41 22.4L45.2 24L43.7 28L46.5 31.5L42.9 34.2L42.4 38.6L38 38.9L35.3 42.1L32 39.8L28.7 42.1L26 38.9L21.6 38.6L21.1 34.2L17.5 31.5L20.3 28L18.8 24L23 22.4L24.2 18L28.6 18.8L32 15.8Z" fill="#FFF8D5"/>
 </svg>

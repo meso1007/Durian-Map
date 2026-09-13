@@ -152,12 +152,36 @@ const chainCafeDomains = [
 ];
 
 // --- APIキャッシュ設定 ---
+type Lead = {
+    id: string;
+    name: string;
+    address: string;
+    category: string;
+    websiteUri?: string;
+    lat?: number;
+    lng?: number;
+    rating?: number;
+    userRatingCount?: number;
+    openNow?: boolean;
+    photoName?: string;
+};
+
 interface CacheEntry {
-    data: any;
+    data: Lead[];
     timestamp: number;
 }
 const searchCache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24; // 24時間キャッシュ
+const DEFAULT_NEARBY_RADIUS_METERS = 1500;
+
+function getNearbySearchTypes(category: string): string[] | null {
+    switch (category) {
+        case 'カフェ':
+            return ['cafe', 'coffee_shop'];
+        default:
+            return null;
+    }
+}
 
 function isChainCafe(name: string, websiteUri?: string): boolean {
     const lowerName = name.toLowerCase();
@@ -171,12 +195,39 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const area = searchParams.get('area');
     const category = searchParams.get('category');
+    const latParam = searchParams.get('lat');
+    const lngParam = searchParams.get('lng');
+    const radiusParam = searchParams.get('radius');
 
-    if (!area || !category) {
-        return NextResponse.json({ error: 'Area and category are required' }, { status: 400 });
+    const lat = latParam ? Number(latParam) : null;
+    const lng = lngParam ? Number(lngParam) : null;
+    const radius = radiusParam ? Number(radiusParam) : DEFAULT_NEARBY_RADIUS_METERS;
+    const hasCoordinates = lat != null && lng != null;
+
+    if (!category) {
+        return NextResponse.json({ error: 'Category is required' }, { status: 400 });
     }
 
-    const cacheKey = `${area}-${category}`;
+    if (!hasCoordinates && !area) {
+        return NextResponse.json({ error: 'Area or coordinates are required' }, { status: 400 });
+    }
+
+    if (hasCoordinates && (
+        Number.isNaN(lat) ||
+        Number.isNaN(lng) ||
+        Number.isNaN(radius) ||
+        lat < -90 ||
+        lat > 90 ||
+        lng < -180 ||
+        lng > 180 ||
+        radius <= 0
+    )) {
+        return NextResponse.json({ error: 'Invalid coordinates or radius' }, { status: 400 });
+    }
+
+    const cacheKey = hasCoordinates
+        ? `nearby-${category}-${lat!.toFixed(4)}-${lng!.toFixed(4)}-${Math.round(radius)}`
+        : `${area}-${category}`;
     const cached = searchCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
         return NextResponse.json({ leads: cached.data });
@@ -189,8 +240,33 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
 
-    const query = `${area} ${category}`;
-    const apiUrl = 'https://places.googleapis.com/v1/places:searchText';
+    const nearbyTypes = hasCoordinates ? getNearbySearchTypes(category) : null;
+    const apiUrl = hasCoordinates && nearbyTypes
+        ? 'https://places.googleapis.com/v1/places:searchNearby'
+        : 'https://places.googleapis.com/v1/places:searchText';
+
+    const requestBody = hasCoordinates && nearbyTypes
+        ? {
+            includedTypes: nearbyTypes,
+            maxResultCount: 20,
+            rankPreference: 'DISTANCE',
+            languageCode: 'ja',
+            regionCode: 'JP',
+            locationRestriction: {
+                circle: {
+                    center: {
+                        latitude: lat,
+                        longitude: lng,
+                    },
+                    radius,
+                },
+            },
+        }
+        : {
+            textQuery: `${area} ${category}`,
+            languageCode: 'ja',
+            regionCode: 'JP',
+        };
 
     try {
         const response = await fetch(apiUrl, {
@@ -200,14 +276,14 @@ export async function GET(request: Request) {
                 'X-Goog-Api-Key': apiKey,
                 'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.primaryType,places.websiteUri,places.location,places.rating,places.userRatingCount,places.regularOpeningHours,places.photos'
             },
-            body: JSON.stringify({ textQuery: query })
+            body: JSON.stringify(requestBody)
         });
 
         const data = await response.json();
         const places: Place[] = data.places || [];
 
         // チェーン店を除外し、独立系カフェのみ返す
-        const leads = places.reduce((acc: any[], place) => {
+        const leads = places.reduce((acc: Lead[], place) => {
             if (!isChainCafe(place.displayName.text, place.websiteUri)) {
                 acc.push({
                     id: place.id,
