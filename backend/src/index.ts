@@ -53,12 +53,22 @@ app.use('/api/*', async (c, next) => {
 
 // --- ヘルスチェック -----------------------------------------------------
 
+/**
+ * API キーが実際に使える状態かを判定する。
+ *
+ * `wrangler secret put` に空入力すると secret 自体は存在するのに値が空、
+ * という状態になり得るので、存在チェックだけでは足りない。
+ */
+function hasApiKey(env: Env): boolean {
+    return (env.GOOGLE_API_KEY ?? '').trim().length > 0;
+}
+
 app.get('/health', (c) =>
     c.json({
         status: 'ok',
         environment: c.env.ENVIRONMENT ?? 'unknown',
         // キーそのものは返さない。設定漏れの検知だけできればよい。
-        googleApiKeyConfigured: Boolean(c.env.GOOGLE_API_KEY),
+        googleApiKeyConfigured: hasApiKey(c.env),
         chainList: chainListSize,
     }),
 );
@@ -85,7 +95,7 @@ const searchQuerySchema = z
     });
 
 app.get('/api/search', async (c) => {
-    if (!c.env.GOOGLE_API_KEY) {
+    if (!hasApiKey(c.env)) {
         console.error('missing_google_api_key');
         return c.json({ error: 'サーバー設定エラーです。' }, 500);
     }
@@ -175,7 +185,7 @@ const photoQuerySchema = z.object({
 });
 
 app.get('/api/photo', async (c) => {
-    if (!c.env.GOOGLE_API_KEY) {
+    if (!hasApiKey(c.env)) {
         console.error('missing_google_api_key');
         return c.json({ error: 'サーバー設定エラーです。' }, 500);
     }

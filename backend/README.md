@@ -76,6 +76,19 @@ bunx wrangler secret put GOOGLE_API_KEY
 # → Places API (New) 用のキーを貼り付ける
 ```
 
+> ⚠️ **このコマンドは対話プロンプトを使うので、必ず普通のターミナルから実行すること。**
+> TTY のない環境（CI、エディタ統合のシェル、`!` プレフィックス経由など）で実行すると、
+> プロンプトが EOF を読んで**空文字の secret が保存される**。secret 自体は存在するのに
+> 値が空、という気づきにくい状態になる。
+>
+> 設定後は必ず `/health` の `googleApiKeyConfigured` が `true` になったか確認する。
+> `false` のままなら値が空なので、ターミナルから設定し直す。
+>
+> TTY がない環境でどうしても設定するなら、ファイル経由で渡す:
+> ```bash
+> bunx wrangler secret put GOOGLE_API_KEY < path/to/key.txt
+> ```
+
 **ローカル開発:**
 
 ```bash
