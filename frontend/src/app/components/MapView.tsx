@@ -10,47 +10,36 @@ import {
   useMap,
 } from '@vis.gl/react-google-maps';
 
-type Cafe = {
-  id: string;
-  name: string;
-  address: string;
-  websiteUri?: string;
-  rating?: number;
-  userRatingCount?: number;
-  openNow?: boolean;
-  photoName?: string;
-  lat?: number;
-  lng?: number;
-};
+// 型の正は lib/api.ts（API のレスポンスと一致させる）
+import type { Cafe, Coordinates } from '@/lib/api';
 
-type Coordinates = {
-  lat: number;
-  lng: number;
-};
-
+// 地図スタイルの値は docs/design-tokens.md「地図スタイル」が正
 const MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#182015' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#182015' }] },
-  { elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
+  { elementType: 'geometry', stylers: [{ color: '#EEF5D9' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#5C6B4A' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#EEF5D9' }] },
   { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#76866a' }] },
 
-  { featureType: 'landscape.man_made', stylers: [{ visibility: 'off' }] },
+  { featureType: 'landscape.man_made', elementType: 'geometry', stylers: [{ color: '#EEF5D9' }] },
+  { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: '#EEF5D9' }] },
+
   { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#D5EBB0' }, { visibility: 'on' }] },
+
   { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road.local', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
+  // 駅名・地名は表示する（docs/design-tokens.md）
+  { featureType: 'transit.station', elementType: 'labels.text', stylers: [{ visibility: 'on' }] },
+
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#FFFFFF' }] },
   { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road.local', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#F7E9B5' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#F7E9B5' }] },
 
-  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#273120' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#324022' }] },
-
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#11180f' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#39514a' }] },
-  { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: '#1c2717' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#CFEDEB' }] },
+  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#5C6B4A' }] },
 
   { featureType: 'administrative', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
-  { featureType: 'administrative.neighborhood', stylers: [{ visibility: 'off' }] },
   { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
 ];
 
@@ -73,9 +62,8 @@ const clusterRenderer: Renderer = {
   render({ count, position }) {
     const svg = window.btoa(`
       <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-        <circle cx="32" cy="32" r="24" fill="#365018" opacity="0.22" />
-        <circle cx="32" cy="32" r="21" fill="#A5D449" />
-        <circle cx="32" cy="32" r="17" fill="#F4D964" />
+        <circle cx="32" cy="32" r="24" fill="#FFF7E6" />
+        <circle cx="32" cy="32" r="20" fill="#A8CF3B" />
       </svg>
     `);
 
@@ -87,9 +75,9 @@ const clusterRenderer: Renderer = {
       },
       label: {
         text: String(count),
-        color: '#274017',
+        color: '#1F3218',
         fontSize: '13px',
-        fontWeight: '800',
+        fontWeight: '700',
       },
       zIndex: 1000 + count,
     });
@@ -276,19 +264,20 @@ function CurrentLocationMarker({ currentLocation }: { currentLocation: Coordinat
   const isLoaded = useApiIsLoaded();
   if (!isLoaded || !currentLocation) return null;
 
+  // 現在地マーカーは --tropic-lagoon-500（docs/design-tokens.md）
   const ring: google.maps.Symbol = {
     path: google.maps.SymbolPath.CIRCLE,
-    fillColor: '#60A5FA',
-    fillOpacity: 0.2,
-    strokeColor: '#BFDBFE',
-    strokeOpacity: 0.95,
+    fillColor: '#2BB3B1',
+    fillOpacity: 0.18,
+    strokeColor: '#2BB3B1',
+    strokeOpacity: 0.5,
     strokeWeight: 1,
     scale: 18,
   };
 
   const dot: google.maps.Symbol = {
     path: google.maps.SymbolPath.CIRCLE,
-    fillColor: '#2563EB',
+    fillColor: '#2BB3B1',
     fillOpacity: 1,
     strokeColor: '#FFFFFF',
     strokeOpacity: 1,
@@ -327,7 +316,7 @@ export default function MapView({
 
   if (!apiKey) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-[#182015] px-6 text-center text-sm text-[#76866a]">
+      <div className="flex h-full w-full items-center justify-center bg-surface-sunken px-6 text-center text-sm leading-[1.6] text-text-muted">
         マップを表示するには NEXT_PUBLIC_GOOGLE_MAPS_API_KEY を設定してください。
       </div>
     );
