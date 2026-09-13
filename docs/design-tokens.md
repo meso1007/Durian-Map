@@ -63,3 +63,16 @@
 - ハイビスカスは「保存・行きたい・準備中」など感情や状態の強調に限定し、面積を小さく使う。
 - テキストはクリーム地に `--durian-seed-900` / `--durian-seed-600` を使い、黄色地に黄色文字の組み合わせは禁止（コントラスト比 4.5:1 未満）。
 - 濃緑面（ヘッダー・主ボタン）の文字は `#FFFFFF` または `--durian-cream-50`。
+
+## タイポグラフィ
+
+| 役割 | フォント | ウェイト | CSS |
+|---|---|---|---|
+| ディスプレイ（ロゴ「Durian Map」、英字ラベル、評価・距離・件数などの数値） | **Co Headline**（Dalton Maag） | Light 300 / Regular 400 / Bold 700 | `font-display`（`--font-display`） |
+| 本文・日本語見出し | M PLUS Rounded 1c | 400 / 500 / 700 / 800 | `font-sans`（既定） |
+| コード・等幅 | Geist Mono | 400 | `font-mono` |
+
+- Co Headline は欧文のみ（ひらがな・漢字を含まない）。`--font-display` は M PLUS Rounded 1c にフォールバックするので、日英混在テキストにそのまま指定してよい。
+- ファイルは `frontend/src/app/fonts/CoHeadline-*.woff2`（各約 80KB）。`next/font/local` で読み込み、CSS 変数 `--font-co-headline` として公開している。
+- アイコン類やマーカー、ロゴ画像を作り直す際も、文字を含む場合は Co Headline Bold を使う。
+- ライセンス: Co Headline は商用フォント。Web 配信（webfont）と配布物（アプリアイコン等）の両方をカバーするライセンスを取得していることを確認してから本番デプロイする。

@@ -323,8 +323,8 @@ export default function CafeFinder() {
             <Image src="/logo.png" alt="Durian Map Logo" width={44} height={44} priority className="relative z-10 w-9 h-9 md:w-10 md:h-10 object-contain drop-shadow-sm" />
           </div>
           <div className="flex items-baseline gap-2 md:gap-2.5">
-            <span className="font-extrabold text-[#284117] tracking-tight text-lg md:text-[1.65rem]">Durian Map</span>
-            <span className="text-[10px] text-[#45631e] font-bold px-2.5 py-1 rounded-full border border-[#c8dd74] bg-[#eff7c8] hidden sm:inline-block shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">NO CHAINS</span>
+            <span className="font-display font-bold text-[#284117] tracking-tight text-lg md:text-[1.65rem]">Durian Map</span>
+            <span className="text-[10px] text-[#45631e] font-bold px-2.5 py-1 rounded-full border border-[#c8dd74] bg-[#eff7c8] hidden sm:inline-block shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] font-display">NO CHAINS</span>
           </div>
         </div>
         <div className="flex items-center gap-1.5 md:gap-2">
@@ -391,7 +391,7 @@ export default function CafeFinder() {
               <div className="shrink-0 pt-2 pb-4 border-b border-[#e1d8aa] md:pt-5">
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div>
-                    <p className="hidden md:block text-[11px] uppercase tracking-[0.22em] text-[#7f9452] font-extrabold">Creamy Search</p>
+                    <p className="hidden md:block text-[11px] uppercase tracking-[0.22em] text-[#7f9452] font-bold font-display">Creamy Search</p>
                     <h2 className="text-base md:text-lg font-extrabold text-[#284117] mt-1">エリアから候補を探す</h2>
                   </div>
                   {currentLocation && (
@@ -578,7 +578,7 @@ function CafeCard({ cafe, isSelected, isSaved, onSelect, onToggleSave }: CafeCar
             {/* 評価と営業時間バッジ */}
             <div className="flex items-center gap-1.5 md:gap-2 mt-1 flex-wrap">
               {cafe.rating && (
-                <div className="flex items-center gap-1 rounded-full bg-[#fff4cb] px-2 py-[3px] text-[11px] font-extrabold text-[#d08f18]">
+                <div className="flex items-center gap-1 rounded-full bg-[#fff4cb] px-2 py-[3px] text-[11px] font-bold font-display text-[#d08f18]">
                   <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
                   {cafe.rating.toFixed(1)} <span className="text-[10px] text-[#8b9369] font-medium">({cafe.userRatingCount})</span>
                 </div>
@@ -685,7 +685,7 @@ function SelectedCafePanel({ cafe, isSaved, onToggleSave, onClose }: {
 
         <div className="flex-1 min-w-0">
           <div className="mb-1.5 flex items-center gap-2">
-            <span className="inline-flex items-center rounded-full bg-[#fff3b8] px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#4d6b22]">
+            <span className="inline-flex items-center rounded-full bg-[#fff3b8] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#4d6b22] font-display">
               Durian Pick
             </span>
             <span className="inline-flex items-center rounded-full bg-white/12 px-2.5 py-1 text-[10px] font-bold text-[#eff7c9]">
@@ -696,7 +696,7 @@ function SelectedCafePanel({ cafe, isSaved, onToggleSave, onClose }: {
 
           <div className="flex flex-wrap items-center gap-2 mt-2.5 md:mt-3">
             {cafe.rating && (
-              <div className="flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-sm font-extrabold text-[#f7dc73]">
+              <div className="flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-sm font-bold font-display text-[#f7dc73]">
                 <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
                 {cafe.rating.toFixed(1)}
                 <span className="text-xs text-[#d6dfb6] font-medium">({cafe.userRatingCount})</span>
@@ -796,7 +796,7 @@ function MapSelectionCard({ cafe, onClose }: { cafe: Cafe; onClose: () => void }
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
               <div className="mb-1">
-                <span className="inline-flex items-center rounded-full bg-[#eef7c8] px-2 py-[3px] text-[10px] font-extrabold text-[#54711f]">
+                <span className="inline-flex items-center rounded-full bg-[#eef7c8] px-2 py-[3px] text-[10px] font-bold text-[#54711f] font-display">
                   Pin Pick
                 </span>
               </div>
@@ -813,7 +813,7 @@ function MapSelectionCard({ cafe, onClose }: { cafe: Cafe; onClose: () => void }
 
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             {cafe.rating && (
-              <span className="inline-flex items-center gap-1 text-xs font-extrabold text-[#d08f18]">
+              <span className="inline-flex items-center gap-1 text-xs font-bold font-display text-[#d08f18]">
                 <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
                 {cafe.rating.toFixed(1)}
               </span>
