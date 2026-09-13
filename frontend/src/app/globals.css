@@ -1,21 +1,65 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f6f0c9;
+  /* 色の正は docs/design-tokens.md を参照 */
+  --background: #fff7e6;
   --foreground: #1f3218;
-  --durian-cream: #f8efbd;
-  --durian-cream-deep: #efdd8f;
-  --durian-shell: #89bf34;
-  --durian-shell-deep: #45631e;
-  --durian-lime: #b7da52;
-  --durian-gold: #edc548;
-  --durian-seed: #223116;
-  --durian-shadow: rgba(76, 102, 26, 0.18);
+
+  /* ブランド（ドリアン） */
+  --durian-green-900: #14532d;
+  --durian-green-700: #1f6b3f;
+  --durian-green-500: #2e8b57;
+  --durian-lime-400: #a8cf3b;
+  --durian-lime-100: #e4f3ba;
+  --durian-cream-50: #fff7e6;
+  --durian-cream-100: #fdf1d4;
+  --durian-cream-200: #f3e4b8;
+  --durian-seed-900: #1f3218;
+  --durian-seed-600: #5c6b4a;
+
+  /* トロピカルアクセント */
+  --tropic-mango-500: #f6a21b;
+  --tropic-mango-700: #d97706;
+  --tropic-hibiscus-500: #e2467c;
+  --tropic-hibiscus-100: #fce1ea;
+  --tropic-lagoon-500: #2bb3b1;
+  --tropic-lagoon-100: #d6f2f1;
+  --tropic-sun-500: #f2b705;
+
+  /* セマンティック */
+  --dm-primary: var(--durian-green-700);
+  --dm-cta: var(--tropic-mango-500);
+  --dm-accent: var(--tropic-hibiscus-500);
+  --dm-info: var(--tropic-lagoon-500);
+  --dm-success: var(--durian-green-500);
+  --dm-error: #c2410c;
+  --dm-surface: var(--durian-cream-50);
+  --dm-border: var(--durian-cream-200);
+  --dm-text: var(--durian-seed-900);
+  --dm-text-muted: var(--durian-seed-600);
+
+  /* 旧トークン（既存クラスの互換用。新規実装では上のトークンを使う） */
+  --durian-cream: var(--durian-cream-50);
+  --durian-cream-deep: var(--durian-cream-200);
+  --durian-shell: var(--durian-lime-400);
+  --durian-shell-deep: var(--durian-green-700);
+  --durian-lime: var(--durian-lime-400);
+  --durian-gold: var(--tropic-sun-500);
+  --durian-seed: var(--durian-seed-900);
+  --durian-shadow: rgba(20, 83, 45, 0.18);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-primary: var(--dm-primary);
+  --color-cta: var(--dm-cta);
+  --color-accent: var(--dm-accent);
+  --color-info: var(--dm-info);
+  --color-success: var(--dm-success);
+  --color-error: var(--dm-error);
+  --color-surface: var(--dm-surface);
+  --color-border: var(--dm-border);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
