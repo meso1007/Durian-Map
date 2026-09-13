@@ -11,22 +11,22 @@ React Native（Expo）でのフルネイティブ化は、後述の「C に移�
 ## 現状のコードベース（2026-09-13 時点）
 
 ```
+backend/                         # Cloudflare Workers（Hono）← API の正
+  src/chains.ts                  # チェーン店ブロックリストと判定ロジック（正）
+  src/index.ts                   # ルーティング / CORS / レート制限 / バリデーション
+  src/places.ts                  # Google Places クライアント、写真取得
+  src/cache.ts  src/ratelimit.ts # KV キャッシュ / レート制限
 frontend/
-  src/app/api/search/route.ts    # 314行 アプリの頭脳（Places API 呼び出し + チェーン店判定）
-  src/app/page.tsx               # 966行 画面本体
-  src/app/components/MapView.tsx # 366行 Google Maps
+  src/app/page.tsx               # 画面本体
+  src/app/components/MapView.tsx # Google Maps
   public/manifest.json           # PWA マニフェスト（導入済み）
 designs/durian-map-tropical.pen  # デザイン案（.pen）
 docs/design.md                   # デザイン規約 ← UI を触る人はこれを読む
 docs/design-tokens.md            # カラートークン（色の正）
 ```
 
-> 注意: `README.md` には `backend/` ディレクトリ（Hono / port 8080）の記述が残っているが、
-> **現在バックエンドは存在しない**。検索 API は Next.js の Route Handler
-> (`frontend/src/app/api/search/route.ts`) に統合済み。README は要更新。
-
-**重要な前提**: チェーン店判定ロジックはすべてサーバー側（Route Handler）にある。
-つまり iOS からも同じ HTTP エンドポイントを叩くだけで再利用できる。**ここを二重実装しないこと。**
+**重要な前提**: チェーン店判定ロジックはすべてサーバー側（`backend/src/chains.ts`）にある。
+iOS からも同じ HTTP エンドポイントを叩くだけで再利用できる。**ここを二重実装しないこと。**
 
 ## 3 つの選択肢と採用理由
 
@@ -44,15 +44,25 @@ B を採る理由:
 
 ## いまやっておく準備（C への移行コストを下げる）
 
-- [ ] **1. API を「独立したエンドポイント」として扱う**
-      `/api/search` を Next.js の内部実装に依存させない。クライアント（Web / iOS）からは
-      `NEXT_PUBLIC_API_BASE_URL` のような設定可能なベース URL 経由で叩く。
-      → `page.tsx` 内の相対パス fetch を、ベース URL を挟む薄い関数（`lib/api.ts`）に集約する。
+- [x] **1. API を「独立したエンドポイント」として切り出す** — 完了
+      Cloudflare Workers（`backend/`）にデプロイ済み: https://durian-map-api.itto-hp.workers.dev
+      Next.js の `/api/search` Route Handler は廃止し、Workers に一本化した。
+      フロントは `NEXT_PUBLIC_API_BASE_URL` 経由で叩く（`frontend/src/lib/api.ts`）。
 - [ ] **2. localStorage 依存を抽象化する**
       保存済みカフェが `localStorage` 直書きのままだと iOS 側と共有できない。
       `lib/storage.ts` のようなラッパーを 1 枚挟み、後からネイティブストレージやサーバー保存に
       差し替えられるようにする。**UI コンポーネントから `localStorage` を直接呼ばない。**
-- [ ] **3. Capacitor 導入**（上記 1・2 の後）
+- [ ] **3. Capacitor 導入**（上記 2 の後）
+
+## デプロイ先
+
+| レイヤ | 環境 | URL |
+|---|---|---|
+| API | Cloudflare Workers（`durian-map-api`） | https://durian-map-api.itto-hp.workers.dev |
+| フロント | 未デプロイ（Vercel 想定） | — |
+
+**フロントを本番デプロイしたら、その URL を `backend/wrangler.jsonc` の `ALLOWED_ORIGINS` に
+追加して再デプロイすること。** 忘れると本番で CORS に弾かれる。
 
 ## やらないこと
 

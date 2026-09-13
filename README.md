@@ -9,24 +9,55 @@
 | [docs/platform-strategy.md](docs/platform-strategy.md) | Web / iOS の方針（結論: API 1 つ・UI 2 つ、iOS は Capacitor） |
 | [docs/design.md](docs/design.md) | **デザイン規約。UI を触る前に必読**（グラデーション禁止・タグの扱い・フォント） |
 | [docs/design-tokens.md](docs/design-tokens.md) | カラートークン（色の正） |
+| [backend/README.md](backend/README.md) | API 仕様・デプロイ手順 |
 
-> **注意**: 以下の「バックエンド（Bun）」の記述は古い。現在 `backend/` は存在せず、
-> 検索 API は `frontend/src/app/api/search/route.ts`（Next.js Route Handler）に統合済み。
+## 構成
 
-## 環境変数（API キー）
+| レイヤ | 技術 | 場所 | デプロイ先 |
+|---|---|---|---|
+| API | Cloudflare Workers / Hono | `backend/` | https://durian-map-api.itto-hp.workers.dev |
+| フロント | Next.js 16 / React 19 / Tailwind v4 | `frontend/` | 未デプロイ（Vercel 想定） |
 
-フロントとバックで **別々のキー**を用意するのがおすすめです（Console で制限を分けやすい）。
+チェーン店判定ロジックの正は `backend/src/chains.ts`。フロントや iOS 側で書き直さないこと。
 
-### フロント（Next.js）
+## セットアップ
 
-1. `frontend/.env.example` を `frontend/.env.local` にコピー
-2. `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` に、**Maps JavaScript API** 用のキーを設定
-3. `bun dev`（または `npm run dev`）で `http://localhost:3000`
+### バックエンド（Cloudflare Workers）
 
-### バックエンド（Bun）
+```bash
+cd backend
+bun install
+cp .dev.vars.example .dev.vars   # GOOGLE_API_KEY に Places API (New) のキーを入れる
+bun run dev                      # http://localhost:8787
+```
 
-1. `backend/.env.example` を `backend/.env` にコピー
-2. `GOOGLE_API_KEY` に **Places API (New)** 用のキーを設定
-3. `cd backend && bun run dev` → `http://localhost:8080`
+本番の API キーは secret として設定する（リポジトリには入れない）:
 
-検索 API はフロントから `http://localhost:8080/api/search` を叩く想定です。両方起動して動作確認してください。
+```bash
+cd backend && bunx wrangler secret put GOOGLE_API_KEY
+```
+
+詳細は [backend/README.md](backend/README.md)。
+
+### フロントエンド（Next.js）
+
+```bash
+cd frontend
+bun install
+cp .env.example .env.local
+bun run dev                      # http://localhost:3000
+```
+
+`frontend/.env.local` に設定するもの:
+
+| 変数 | 用途 |
+|---|---|
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | 地図表示（Maps JavaScript API 用。HTTP リファラー制限をかけること） |
+| `NEXT_PUBLIC_API_BASE_URL` | 検索 API のベース URL。ローカルは `http://localhost:8787` |
+
+> 写真の表示は Worker の `/api/photo` 経由で行う。フロントに Places のキーを埋め込まないこと。
+
+## 注意
+
+- API キーは**地図用とPlaces用で分ける**（Google Console で制限を分けやすい）
+- フロントを本番デプロイしたら、その URL を `backend/wrangler.jsonc` の `ALLOWED_ORIGINS` に追加して再デプロイする
