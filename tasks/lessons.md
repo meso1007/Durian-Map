@@ -193,12 +193,31 @@ Git 上は両方のコミットが残るので、マージするまで誰も気�
 curl -s -i -H "Origin: capacitor://localhost" "$API/api/search?..." | grep -i access-control-allow-origin
 ```
 
-### `wrangler deploy` 直後の検証は数秒待つ
+### `wrangler deploy` 直後の検証は「変わるまで」繰り返す
 
 デプロイ完了メッセージの直後に叩くと、まだ旧バージョンが応答することがある。
-「追加したオリジンだけ拒否される」という紛らわしい結果になった（数秒後には正常）。
+「追加したオリジンだけ拒否される」という紛らわしい結果になった。
+**8 秒待っても足りないことがあった**（十数秒で正常化）。
 
-**ルール**: デプロイ直後に検証して想定と違ったら、まず数秒おいて再実行する。
+**ルール**: 固定の sleep ではなく、期待する応答になるまで数回リトライして確認する。
+
+```bash
+for i in $(seq 1 10); do
+  curl -s -i -H "Origin: capacitor://localhost" "$API/api/search?area=渋谷&category=カフェ" \
+    | grep -qi "^access-control-allow-origin" && { echo OK; break; }
+  sleep 5
+done
+```
+
+### 恒久対処: 環境で変わらない値は環境変数に置かない
+
+`capacitor://localhost` は「iOS アプリそのものの Origin」であって環境ごとの設定ではない。
+`ALLOWED_ORIGINS` に置いていたせいで、別ブランチがその行を編集してデプロイするたびに
+消えていた（**同じ事故を 2 回起こした**）。`backend/src/index.ts` の
+`NATIVE_APP_ORIGINS` に移し、コードとして常に許可するようにした。
+
+**ルール**: 「環境で変わるか？」で置き場所を決める。変わらないならコードに置く。
+そうすればマージで自然に合流し、設定の編集合戦で消えない。
 
 ## 2026-09-15: ブランド刷新に追従するとき
 

@@ -84,8 +84,10 @@ Web と iOS で実体が変わるものは、すべて `frontend/src/lib/` の�
 
 ## iOS 固有の落とし穴
 
-- **CORS**: WebView の Origin は `capacitor://localhost`。`backend/wrangler.jsonc` の
-  `ALLOWED_ORIGINS` に入れていないと API が全滅する（追加済み）。
+- **CORS**: WebView の Origin は `capacitor://localhost`。これは環境で変わらない値なので
+  `backend/src/index.ts` の `NATIVE_APP_ORIGINS` で**常に許可**している。
+  `ALLOWED_ORIGINS`（環境変数）には書かないこと — 別ブランチがその行を編集して
+  デプロイすると消え、iOS だけ静かに壊れる。→ tasks/lessons.md
 - **共有 URL**: ネイティブでは `window.location.origin` が `capacitor://localhost` になり
   共有先で開けない。`NEXT_PUBLIC_WEB_BASE_URL`（= Pages の公開 URL）を
   `build:ios` で焼き込んでいる。

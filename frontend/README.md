@@ -108,8 +108,9 @@ xcrun simctl launch booted com.durianmap.app
 
 ### iOS 側で気をつけること
 
-- WebView の Origin は `capacitor://localhost`。**Worker の `ALLOWED_ORIGINS` に
-  これが入っていないと API が全部 CORS で落ちる**（`backend/wrangler.jsonc`）。
+- WebView の Origin は `capacitor://localhost`。Worker 側は
+  `backend/src/index.ts` の `NATIVE_APP_ORIGINS` で常に許可している
+  （環境変数 `ALLOWED_ORIGINS` には書かない）。
 - 位置情報の用途文言は `ios/App/App/Info.plist` の
   `NSLocationWhenInUseUsageDescription`。
 - 画面端に UI を足すときは `env(safe-area-inset-*)` を見込む。
