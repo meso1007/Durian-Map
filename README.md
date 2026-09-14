@@ -17,7 +17,7 @@
 | レイヤ | 技術 | 場所 | デプロイ先 |
 |---|---|---|---|
 | API | Cloudflare Workers / Hono | `backend/` | https://durian-map-api.dailyreading.workers.dev |
-| フロント（Web） | Next.js 16 / React 19 / Tailwind v4 | `frontend/` | 未デプロイ（Vercel 想定） |
+| フロント（Web） | Next.js 16 / React 19 / Tailwind v4（静的書き出し） | `frontend/` | https://durian-map.pages.dev |
 | iOS アプリ | Capacitor 8（WebView） | `frontend/ios/` | ローカルビルドのみ |
 
 **iOS は Web と同じコードから作る**（`frontend/` の静的書き出しを WebView に載せている）。

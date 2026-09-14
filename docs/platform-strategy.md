@@ -16,9 +16,12 @@ backend/                         # Cloudflare Workers（Hono）← API の正
   src/index.ts                   # ルーティング / CORS / レート制限 / バリデーション
   src/places.ts                  # Google Places クライアント、写真取得
   src/cache.ts  src/ratelimit.ts # KV キャッシュ / レート制限
-frontend/
+frontend/                        # Cloudflare Pages（静的書き出し）
+  next.config.ts                 # output: 'export' ← Pages / Capacitor 共通の前提
   src/app/page.tsx               # 画面本体
   src/app/components/MapView.tsx # Google Maps
+  src/lib/api.ts                 # Workers API クライアント（UI から直 fetch しない）
+  src/lib/storage.ts             # 永続化の抽象化（UI から localStorage を直呼びしない）
   public/manifest.json           # PWA マニフェスト（導入済み）
 designs/durian-map-tropical.pen  # デザイン案（.pen）
 docs/design.md                   # デザイン規約 ← UI を触る人はこれを読む
@@ -52,12 +55,16 @@ B を採る理由:
       `frontend/src/lib/storage.ts` に集約。API は非同期にしてあるので、実体を
       Capacitor Preferences やサーバー保存に差し替えても UI 側の修正は不要。
       **UI コンポーネントから `localStorage` を直接呼ばないこと。**
-- [x] **3. Capacitor 導入** — 完了（2026-09-14）
+- [x] **3. 静的書き出しの検証** — 完了
+      `output: 'export'` でビルドが通ることを確認済み（`frontend/next.config.ts`）。
+      サーバー機能は元から不使用、`useSearchParams` も Suspense 境界の内側にあった。
+      画像最適化だけ `images.unoptimized` で無効化している。
+- [x] **4. Capacitor 導入** — 完了（2026-09-14）
       `frontend/capacitor.config.ts` / `frontend/ios/`。手順は `frontend/README.md`。
       - appId `com.durianmap.app` / appName `Durian Map`
       - **依存は CocoaPods ではなく Swift Package Manager**
         （`cap add ios --packagemanager SPM`）。CocoaPods は入れなくてよい
-      - Next.js は `output: 'export'`。`bun run build:ios` で書き出し〜同期まで走る
+      - `bun run build:ios` で静的書き出し〜 iOS プロジェクトへの同期まで走る
       - プラットフォーム差分は `lib/` に閉じ込めた（下記）
 
 ## プラットフォーム差分の置き場所
@@ -80,24 +87,32 @@ Web と iOS で実体が変わるものは、すべて `frontend/src/lib/` の�
 - **CORS**: WebView の Origin は `capacitor://localhost`。`backend/wrangler.jsonc` の
   `ALLOWED_ORIGINS` に入れていないと API が全滅する（追加済み）。
 - **共有 URL**: ネイティブでは `window.location.origin` が `capacitor://localhost` になり
-  共有先で開けない。Web を本番デプロイしたら `NEXT_PUBLIC_WEB_BASE_URL` にその URL を
-  設定する。未設定の間は Google マップの URL を共有する。
+  共有先で開けない。`NEXT_PUBLIC_WEB_BASE_URL`（= Pages の公開 URL）を
+  `build:ios` で焼き込んでいる。
 - **地図キーの制限**: `capacitor://` からのリクエストには HTTP リファラー制限が効かない。
   Maps JavaScript API はバンドル ID 制限に対応していないため、iOS 用は
   「Maps JavaScript API だけに絞った別キー + 割当上限」で守る。→ ToDo.md
 - **セーフエリア**: `viewport-fit=cover` を入れたので `env(safe-area-inset-*)` が効く。
-  新しく画面端に置く UI はセーフエリアを足すこと。
+  新しく画面端に置く UI はセーフエリアを足すこと（下部タブバーは対応済み）。
 
 ## デプロイ先
 
 | レイヤ | 環境 | URL |
 |---|---|---|
 | API | Cloudflare Workers（`durian-map-api`） | https://durian-map-api.dailyreading.workers.dev |
-| フロント（Web） | 未デプロイ（Vercel 想定） | — |
+| フロント（Web） | Cloudflare Pages（`durian-map`） | https://durian-map.pages.dev |
 | iOS | ローカルビルドのみ（App Store 未提出） | `frontend/ios/` |
 
-**フロントを本番デプロイしたら、その URL を `backend/wrangler.jsonc` の `ALLOWED_ORIGINS` に
-追加して再デプロイすること。** 忘れると本番で CORS に弾かれる。
+サーバーはすべて Cloudflare に寄せる方針。フロントは `output: 'export'` の静的書き出しを
+`wrangler pages deploy` で直接アップロードしている（`cd frontend && bun run deploy`）。
+
+**許可オリジンは `backend/wrangler.jsonc` の `ALLOWED_ORIGINS`**。判定は完全一致なので、
+Pages のプレビューデプロイ（`https://<hash>.durian-map.pages.dev`）は CORS で弾かれる。
+本番ドメインでの確認を正とする。
+
+> Cloudflare は Pages を Workers 側へ統合中で、`wrangler pages project create` は
+> 既定で Workers へ委譲される。この `durian-map` プロジェクトは `--force` を付けて
+> 従来の Pages 側に作成済み。**以降のコマンドに `--force` は不要**。
 
 ## やらないこと
 

@@ -9,11 +9,12 @@
   },
   "vars": {
     "ENVIRONMENT": "production",
-    // CORS 許可オリジン（カンマ区切り）。本番フロントの URL が決まったらここに追加する。
+    // CORS 許可オリジン（カンマ区切り）。src/index.ts の判定は完全一致なので、
+    // Pages のプレビューデプロイ（https://<hash>.durian-map.pages.dev）は弾かれる。
     // 未設定時は localhost:3000 のみ許可（src/index.ts の DEV_ORIGINS）。
     // capacitor://localhost は iOS アプリ（Capacitor の WebView）の Origin。
     // ここに無いと iOS から API が全部 CORS で弾かれる。→ docs/platform-strategy.md
-    "ALLOWED_ORIGINS": "http://localhost:3000,http://127.0.0.1:3000,capacitor://localhost"
+    "ALLOWED_ORIGINS": "https://durian-map.pages.dev,http://localhost:3000,http://127.0.0.1:3000,capacitor://localhost"
   },
   "kv_namespaces": [
     {

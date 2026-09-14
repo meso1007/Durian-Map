@@ -169,6 +169,8 @@ function toLead(category: string) {
         rating: place.rating,
         userRatingCount: place.userRatingCount,
         openNow: place.regularOpeningHours?.openNow,
+        weekdayDescriptions: place.regularOpeningHours?.weekdayDescriptions,
+        phone: place.nationalPhoneNumber,
         photoName: place.photos?.[0]?.name,
     });
 }
