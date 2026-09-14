@@ -1,305 +1,34 @@
 'use client';
 
-import { MarkerClusterer, type Renderer } from '@googlemaps/markerclusterer';
-import { useEffect, useRef } from 'react';
-import {
-  APIProvider,
-  Map,
-  Marker,
-  useApiIsLoaded,
-  useMap,
-} from '@vis.gl/react-google-maps';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { APIProvider, Map, Marker, useApiIsLoaded, useMap } from '@vis.gl/react-google-maps';
 
 // 型の正は lib/api.ts（API のレスポンスと一致させる）
 import type { Cafe, Coordinates } from '@/lib/api';
+import { distanceBetween } from '@/lib/geo';
+import { snapRadius } from '@/hooks/useCafeSearch';
+import type { SearchRadius } from '@/hooks/useCafeSearch';
+import { useCafeMarkers } from '@/hooks/useCafeMarkers';
+import { useMapCamera } from '@/hooks/useMapCamera';
 
-// 地図スタイルの値は docs/design-tokens.md「地図スタイル」が正
-const MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#EEF5D9' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#5C6B4A' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#EEF5D9' }] },
-  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+import { CURRENT_LOCATION_DOT, CURRENT_LOCATION_RING, MAP_STYLE } from './map/mapStyle';
+import { SearchIcon } from './icons';
 
-  { featureType: 'landscape.man_made', elementType: 'geometry', stylers: [{ color: '#EEF5D9' }] },
-  { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: '#EEF5D9' }] },
-
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#D5EBB0' }, { visibility: 'on' }] },
-
-  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  // 駅名・地名は表示する（docs/design-tokens.md）
-  { featureType: 'transit.station', elementType: 'labels.text', stylers: [{ visibility: 'on' }] },
-
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#FFFFFF' }] },
-  { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road.local', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#F7E9B5' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#F7E9B5' }] },
-
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#CFEDEB' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#5C6B4A' }] },
-
-  { featureType: 'administrative', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
-  { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
-];
-
-const MARKER_ICON = '/marker.svg';
-const MARKER_ICON_SELECTED = '/marker-selected.svg';
-const MARKER_SIZE = 42;
-const MARKER_SIZE_SELECTED = 52;
-
-const createCafeMarkerIcon = (selected: boolean, sizeOverride?: number): google.maps.Icon => {
-  const size = sizeOverride ?? (selected ? MARKER_SIZE_SELECTED : MARKER_SIZE);
-
-  return {
-    url: selected ? MARKER_ICON_SELECTED : MARKER_ICON,
-    scaledSize: new google.maps.Size(size, size),
-    anchor: new google.maps.Point(size / 2, size),
-  };
-};
-
-const clusterRenderer: Renderer = {
-  render({ count, position }) {
-    const svg = window.btoa(`
-      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-        <circle cx="32" cy="32" r="24" fill="#FFF7E6" />
-        <circle cx="32" cy="32" r="20" fill="#A8CF3B" />
-      </svg>
-    `);
-
-    return new google.maps.Marker({
-      position,
-      icon: {
-        url: `data:image/svg+xml;base64,${svg}`,
-        scaledSize: new google.maps.Size(56, 56),
-      },
-      label: {
-        text: String(count),
-        color: '#1F3218',
-        fontSize: '13px',
-        fontWeight: '700',
-      },
-      zIndex: 1000 + count,
-    });
-  },
-};
-
-function MapController({
-  cafes,
-  selectedId,
-  currentLocation,
-  emphasizeCurrentLocation,
-}: {
-  cafes: Cafe[];
-  selectedId: string | null;
-  currentLocation: Coordinates | null;
-  emphasizeCurrentLocation: boolean;
-}) {
-  const map = useMap();
-
-  useEffect(() => {
-    if (!map) return;
-
-    const validCafes = cafes.filter((cafe) => cafe.lat != null && cafe.lng != null);
-
-    if (selectedId) {
-      const targetCafe = validCafes.find((cafe) => cafe.id === selectedId);
-      if (targetCafe) {
-        map.panTo({ lat: targetCafe.lat!, lng: targetCafe.lng! });
-        map.setZoom(Math.max(map.getZoom() ?? 16, 16));
-        return;
-      }
-    }
-
-    if (validCafes.length === 0) {
-      if (currentLocation) {
-        map.panTo(currentLocation);
-        map.setZoom(15);
-      }
-      return;
-    }
-
-    const bounds = new google.maps.LatLngBounds();
-    if (currentLocation) {
-      bounds.extend(currentLocation);
-    }
-    validCafes.forEach((cafe) => bounds.extend({ lat: cafe.lat!, lng: cafe.lng! }));
-    map.fitBounds(bounds, emphasizeCurrentLocation && currentLocation ? 96 : 72);
-  }, [cafes, selectedId, currentLocation, emphasizeCurrentLocation, map]);
-
-  return null;
-}
-
-function CafeMarkers({
-  cafes,
-  selectedId,
-  onSelectCafe,
-}: {
-  cafes: Cafe[];
-  selectedId: string | null;
-  onSelectCafe: (id: string) => void;
-}) {
-  const map = useMap();
-  const isLoaded = useApiIsLoaded();
-  const clustererRef = useRef<MarkerClusterer | null>(null);
-  const markersRef = useRef<google.maps.Marker[]>([]);
-  const selectedMarkerRef = useRef<google.maps.Marker | null>(null);
-  const selectionAnimationRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!map || !isLoaded) return;
-
-    clustererRef.current = new MarkerClusterer({
-      map,
-      renderer: clusterRenderer,
-    });
-
-    return () => {
-      clustererRef.current?.clearMarkers();
-      clustererRef.current?.setMap(null);
-      clustererRef.current = null;
-
-      markersRef.current.forEach((marker) => {
-        google.maps.event.clearInstanceListeners(marker);
-        marker.setMap(null);
-      });
-      markersRef.current = [];
-
-      if (selectedMarkerRef.current) {
-        google.maps.event.clearInstanceListeners(selectedMarkerRef.current);
-        selectedMarkerRef.current.setMap(null);
-        selectedMarkerRef.current = null;
-      }
-
-      if (selectionAnimationRef.current) {
-        window.cancelAnimationFrame(selectionAnimationRef.current);
-        selectionAnimationRef.current = null;
-      }
-    };
-  }, [map, isLoaded]);
-
-  useEffect(() => {
-    if (!map || !isLoaded || !clustererRef.current) return;
-
-    const validCafes = cafes.filter((cafe) => cafe.lat != null && cafe.lng != null);
-    const selectedCafe = selectedId ? validCafes.find((cafe) => cafe.id === selectedId) ?? null : null;
-    const clusteredCafes = selectedCafe
-      ? validCafes.filter((cafe) => cafe.id !== selectedCafe.id)
-      : validCafes;
-
-    clustererRef.current.clearMarkers(true);
-    markersRef.current.forEach((marker) => {
-      google.maps.event.clearInstanceListeners(marker);
-      marker.setMap(null);
-    });
-
-    markersRef.current = clusteredCafes.map((cafe) => {
-      const marker = new google.maps.Marker({
-        position: { lat: cafe.lat!, lng: cafe.lng! },
-        title: cafe.name,
-        icon: createCafeMarkerIcon(false),
-        zIndex: 20,
-      });
-
-      marker.addListener('click', () => onSelectCafe(cafe.id));
-      return marker;
-    });
-
-    if (markersRef.current.length > 0) {
-      clustererRef.current.addMarkers(markersRef.current, true);
-    }
-    clustererRef.current.render();
-
-    if (selectedMarkerRef.current) {
-      google.maps.event.clearInstanceListeners(selectedMarkerRef.current);
-      selectedMarkerRef.current.setMap(null);
-      selectedMarkerRef.current = null;
-    }
-
-    if (selectionAnimationRef.current) {
-      window.cancelAnimationFrame(selectionAnimationRef.current);
-      selectionAnimationRef.current = null;
-    }
-
-    if (selectedCafe) {
-      const startSize = MARKER_SIZE + 2;
-      const selectedMarker = new google.maps.Marker({
-        map,
-        position: { lat: selectedCafe.lat!, lng: selectedCafe.lng! },
-        title: selectedCafe.name,
-        icon: createCafeMarkerIcon(true, startSize),
-        zIndex: 120,
-        opacity: 0.82,
-      });
-
-      selectedMarker.addListener('click', () => onSelectCafe(selectedCafe.id));
-      selectedMarkerRef.current = selectedMarker;
-
-      const animationStart = window.performance.now();
-      const animationDuration = 180;
-      const step = (timestamp: number) => {
-        const progress = Math.min((timestamp - animationStart) / animationDuration, 1);
-        const eased = 1 - ((1 - progress) ** 3);
-        const currentSize = startSize + ((MARKER_SIZE_SELECTED - startSize) * eased);
-
-        selectedMarker.setIcon(createCafeMarkerIcon(true, Math.round(currentSize)));
-        selectedMarker.setOpacity(0.82 + (0.18 * eased));
-
-        if (progress < 1) {
-          selectionAnimationRef.current = window.requestAnimationFrame(step);
-          return;
-        }
-
-        selectionAnimationRef.current = null;
-      };
-
-      selectionAnimationRef.current = window.requestAnimationFrame(step);
-    }
-  }, [cafes, selectedId, isLoaded, map, onSelectCafe]);
-
-  return null;
-}
-
-function CurrentLocationMarker({ currentLocation }: { currentLocation: Coordinates | null }) {
-  const isLoaded = useApiIsLoaded();
-  if (!isLoaded || !currentLocation) return null;
-
-  // 現在地マーカーは --tropic-lagoon-500（docs/design-tokens.md）
-  const ring: google.maps.Symbol = {
-    path: google.maps.SymbolPath.CIRCLE,
-    fillColor: '#2BB3B1',
-    fillOpacity: 0.18,
-    strokeColor: '#2BB3B1',
-    strokeOpacity: 0.5,
-    strokeWeight: 1,
-    scale: 18,
-  };
-
-  const dot: google.maps.Symbol = {
-    path: google.maps.SymbolPath.CIRCLE,
-    fillColor: '#2BB3B1',
-    fillOpacity: 1,
-    strokeColor: '#FFFFFF',
-    strokeOpacity: 1,
-    strokeWeight: 3,
-    scale: 7,
-  };
-
-  return (
-    <>
-      <Marker position={currentLocation} icon={ring} clickable={false} zIndex={6} />
-      <Marker position={currentLocation} icon={dot} clickable={false} zIndex={7} />
-    </>
-  );
-}
+/** これ以上動かしたら「このエリアで再検索」を出す。 */
+const RESEARCH_THRESHOLD_METERS = 300;
 
 type Props = {
   cafes: Cafe[];
   selectedId: string | null;
   currentLocation: Coordinates | null;
   emphasizeCurrentLocation: boolean;
+  /** 検索が完了するたびに変わる値。地図が「検索直後の視点」を覚え直す合図。 */
+  searchToken: number;
   onSelectCafe: (id: string) => void;
   onClearSelection: () => void;
+  /** 「このエリアで再検索」。表示中の範囲から半径を出して渡す。 */
+  onSearchThisArea: (center: Coordinates, radius: SearchRadius) => void;
+  onError: (message: string) => void;
 };
 
 export default function MapView({
@@ -307,12 +36,17 @@ export default function MapView({
   selectedId,
   currentLocation,
   emphasizeCurrentLocation,
+  searchToken,
   onSelectCafe,
   onClearSelection,
+  onSearchThisArea,
+  onError,
 }: Props) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
   const defaultCenter = currentLocation ?? { lat: 35.6762, lng: 139.6503 };
-  const defaultZoom = currentLocation ? 15 : 12;
+  const defaultZoom = currentLocation ? 15 : 13;
+
+  const handleApiError = useCallback(() => onError('地図を読み込めませんでした。'), [onError]);
 
   if (!apiKey) {
     return (
@@ -323,7 +57,8 @@ export default function MapView({
   }
 
   return (
-    <APIProvider apiKey={apiKey}>
+    // version は固定する。既定の weekly は破壊的変更が黙って降ってくる。
+    <APIProvider apiKey={apiKey} version="quarterly" onError={handleApiError}>
       <Map
         defaultCenter={defaultCenter}
         defaultZoom={defaultZoom}
@@ -341,15 +76,143 @@ export default function MapView({
         className="h-full w-full"
         onClick={onClearSelection}
       >
-        <MapController
+        <MapLayers
           cafes={cafes}
           selectedId={selectedId}
           currentLocation={currentLocation}
           emphasizeCurrentLocation={emphasizeCurrentLocation}
+          onSelectCafe={onSelectCafe}
         />
-        <CurrentLocationMarker currentLocation={currentLocation} />
-        <CafeMarkers cafes={cafes} selectedId={selectedId} onSelectCafe={onSelectCafe} />
+        <ResearchPrompt searchToken={searchToken} onSearchThisArea={onSearchThisArea} />
       </Map>
     </APIProvider>
   );
+}
+
+/** <Map> の子でしか useMap() が使えないので、フックはここでまとめて呼ぶ。 */
+function MapLayers({
+  cafes,
+  selectedId,
+  currentLocation,
+  emphasizeCurrentLocation,
+  onSelectCafe,
+}: {
+  cafes: Cafe[];
+  selectedId: string | null;
+  currentLocation: Coordinates | null;
+  emphasizeCurrentLocation: boolean;
+  onSelectCafe: (id: string) => void;
+}) {
+  useMapCamera({ cafes, selectedId, currentLocation, emphasizeCurrentLocation });
+  useCafeMarkers({ cafes, selectedId, onSelectCafe });
+
+  return <CurrentLocationMarker currentLocation={currentLocation} />;
+}
+
+function CurrentLocationMarker({ currentLocation }: { currentLocation: Coordinates | null }) {
+  const isLoaded = useApiIsLoaded();
+  if (!isLoaded || !currentLocation) return null;
+
+  const ring: google.maps.Symbol = { path: google.maps.SymbolPath.CIRCLE, ...CURRENT_LOCATION_RING };
+  const dot: google.maps.Symbol = { path: google.maps.SymbolPath.CIRCLE, ...CURRENT_LOCATION_DOT };
+
+  return (
+    <>
+      <Marker position={currentLocation} icon={ring} clickable={false} zIndex={6} />
+      <Marker position={currentLocation} icon={dot} clickable={false} zIndex={7} />
+    </>
+  );
+}
+
+/**
+ * 「このエリアで再検索」のピル。
+ *
+ * 検索直後の中心を基準に覚え、そこから 300m 以上動かしたら出す。
+ * Google マップと同じ探索の流れ（動かす → その場所で探し直す）を作るためのもので、
+ * 最重要 CTA（近くからさがす）とぶつからないよう Secondary の見た目にする
+ * （最重要 CTA は 1 画面 1 つ / docs/design.md 1節）。
+ */
+function ResearchPrompt({
+  searchToken,
+  onSearchThisArea,
+}: {
+  searchToken: number;
+  onSearchThisArea: (center: Coordinates, radius: SearchRadius) => void;
+}) {
+  const map = useMap();
+  const [visible, setVisible] = useState(false);
+  const baselineRef = useRef<Coordinates | null>(null);
+  // 次に静止したときの中心を基準として取り直す（検索直後は fitBounds が走る）。
+  const resetBaselineRef = useRef(true);
+
+  useEffect(() => {
+    if (!map) return;
+
+    // 検索が終わるたびに基準を取り直す。直後に fitBounds が走るので、
+    // その結果落ち着いた位置が「検索したエリア」になる。
+    resetBaselineRef.current = true;
+
+    const listener = map.addListener('idle', () => {
+      const center = map.getCenter();
+      if (!center) return;
+
+      const position = { lat: center.lat(), lng: center.lng() };
+
+      if (resetBaselineRef.current || !baselineRef.current) {
+        baselineRef.current = position;
+        resetBaselineRef.current = false;
+        setVisible(false);
+        return;
+      }
+
+      setVisible(distanceBetween(baselineRef.current, position) >= RESEARCH_THRESHOLD_METERS);
+    });
+
+    return () => listener.remove();
+  }, [map, searchToken]);
+
+  const handleClick = () => {
+    const center = map?.getCenter();
+    if (!map || !center) return;
+
+    setVisible(false);
+    onSearchThisArea({ lat: center.lat(), lng: center.lng() }, viewportRadius(map));
+  };
+
+  return (
+    <>
+      {visible && (
+        <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-4">
+          <button
+            type="button"
+            onClick={handleClick}
+            className="pointer-events-auto inline-flex min-h-11 items-center gap-2 rounded-full border border-border bg-surface px-4 text-sm font-bold text-text shadow-card"
+          >
+            <SearchIcon className="w-4 h-4" />
+            このエリアで再検索
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * 表示中の範囲から検索半径を出す。
+ *
+ * 短辺の半分を採り、API が受け付ける値に丸める。長辺で採ると画面外まで
+ * 検索してしまい、結果が地図に収まらない。
+ */
+function viewportRadius(map: google.maps.Map): SearchRadius {
+  const bounds = map.getBounds();
+  const center = map.getCenter();
+  if (!bounds || !center) return snapRadius(1500);
+
+  const ne = bounds.getNorthEast();
+  const sw = bounds.getSouthWest();
+
+  const width = distanceBetween({ lat: center.lat(), lng: sw.lng() }, { lat: center.lat(), lng: ne.lng() });
+  const height = distanceBetween({ lat: sw.lat(), lng: center.lng() }, { lat: ne.lat(), lng: center.lng() });
+
+  return snapRadius(Math.min(width, height) / 2);
 }

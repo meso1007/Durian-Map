@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // iOS（Capacitor）のネイティブプロジェクト。App/App/public は
+    // `cap sync` が out/ からコピーしたビルド成果物なので lint しない。
+    "ios/**",
   ]),
 ]);
 
