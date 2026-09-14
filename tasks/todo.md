@@ -60,19 +60,66 @@ appId は `com.durianmap.app` / appName は `Durian Map`（ユーザー確認済
 - Worker の `ALLOWED_ORIGINS` が localhost:3000 のみ → iOS から API が全滅する
 
 ### 計画
-- [ ] 1. `next.config.ts` を `output: 'export'` + `images.unoptimized` に
-- [ ] 2. `layout.tsx` に `viewportFit: 'cover'`、ヘッダー等に `env(safe-area-inset-*)` を適用
-- [ ] 3. プラットフォーム差分を `lib/` に閉じ込める（UI から直接ネイティブ API を呼ばない）
+- [x] 1. `next.config.ts` を `output: 'export'` + `images.unoptimized` に
+- [x] 2. `layout.tsx` に `viewportFit: 'cover'`、ヘッダー等に `env(safe-area-inset-*)` を適用
+- [x] 3. プラットフォーム差分を `lib/` に閉じ込める（UI から直接ネイティブ API を呼ばない）
       - `lib/platform.ts`（ネイティブ判定）
       - `lib/storage.ts` を Capacitor Preferences に差し替え
       - `lib/geolocation.ts` / `lib/share.ts` を新設し `page.tsx` の呼び出しを置換
-- [ ] 4. 2.0MB のロゴを表示サイズに合わせて縮小（WebView の初回描画対策）
-- [ ] 5. Capacitor 導入（`capacitor.config.ts` / `cap add ios --packagemanager SPM`）
-- [ ] 6. `Info.plist` に位置情報の用途文言・表示名を設定
-- [ ] 7. アイコン / スプラッシュ生成（`@capacitor/assets`）
-- [ ] 8. `ALLOWED_ORIGINS` に `capacitor://localhost` を追加して Worker を再デプロイ
-- [ ] 9. シミュレータで起動し、検索・地図・保存・共有・位置情報を実機確認（スクショ）
-- [ ] 10. ドキュメント更新（README / platform-strategy / ToDo）とコミット
+- [x] 4. 2.0MB のロゴを表示サイズに合わせて縮小（WebView の初回描画対策）
+- [x] 5. Capacitor 導入（`capacitor.config.ts` / `cap add ios --packagemanager SPM`）
+- [x] 6. `Info.plist` に位置情報の用途文言・表示名を設定
+- [x] 7. アイコン / スプラッシュ生成（`@capacitor/assets`）
+- [x] 8. `ALLOWED_ORIGINS` に `capacitor://localhost` を追加して Worker を再デプロイ
+- [x] 9. シミュレータで起動し確認（下記「検証結果」）
+- [x] 10. ドキュメント更新（README / platform-strategy / ToDo）とコミット
+
+### 検証結果（iPhone 17 シミュレータ / iOS 26.2）
+
+自動で確認できたもの:
+
+| 項目 | 結果 |
+|---|---|
+| ビルド（SPM・CocoaPods なし） | `** BUILD SUCCEEDED **` |
+| 起動・WebView 描画 | OK（スプラッシュ → 画面表示） |
+| セーフエリア | OK。ヘッダーが Dynamic Island に潜らない |
+| 地図（Maps JS を `capacitor://` から読み込み） | OK |
+| 現在地（Capacitor Geolocation） | OK。`simctl location` の座標を取得 |
+| 逆ジオコード（Nominatim 直叩き） | OK。「渋谷区」が入力欄に入る |
+| 検索 API（`capacitor://localhost` の CORS） | OK。curl で `access-control-allow-origin: capacitor://localhost` を確認 |
+| 検索 → 一覧・マーカー・写真の描画 | OK。渋谷で 19 件、クラスタリングと写真プロキシまで動作 |
+| JS エラー / CORS エラー | ログに無し（残るのは Maps JS 内部の WebP デコード警告のみ） |
+
+未確認（タップ操作が要るもの。`osascript` のクリックは補助アクセス権限が無く `-25211` で失敗する）:
+
+- 保存タブへの保存とアプリ再起動後の復元（Capacitor Preferences）
+- 共有シート（`@capacitor/share`）
+- ボトムシートのスワイプ操作
+
+> 検索の描画は、ビルド済み `out/` をローカル配信して `server.url` に
+> `?area=渋谷` を渡す形で WebView 内から確認した（検証後に設定は戻してある）。
+
+## レビュー
+
+**やったこと**: `docs/platform-strategy.md` の B 案（Capacitor）をそのまま実装した。
+Web と iOS は同一コードベースのままで、差分は `frontend/src/lib/` の 4 ファイルに閉じ込めた。
+
+**設計判断**:
+- **CocoaPods を使わず SPM**。このマシンの system Ruby が 2.6 で CocoaPods を入れづらく、
+  Capacitor 8 は SPM に対応しているため回避できた。依存が Xcode 管理になり後片付けも楽。
+- **`navigator.*` を UI から追い出した**。`storage.ts` だけが抽象化されていたが、
+  位置情報・共有も同じ理由で差し替えが必要だったので同じ形に揃えた。
+- **`alert()` をトーストに置換**。ネイティブで `alert()` はアプリ内ダイアログとして浮くうえ、
+  この画面には既にトーストがある。`--dm-success` はトークン表で「保存完了トースト」用と
+  定義済みだったので、それに合わせた。
+
+**ついでに直した既存の問題**:
+1. ヘッダーのロゴが 1024px / 2.0MB の画像を 44px で描画していた → 192px / 61KB に
+2. `docs/design.md` のフォント TODO が全部実装済みなのに未チェックのままだった
+3. ESLint が `ios/` 配下のビルド成果物を舐めて 24 errors を出していた → ignore 追加
+
+**次にやること**: `ToDo.md` の「次のマイルストーン: iOS の配布」。
+特に **iOS 用の地図キー**（`capacitor://` にリファラー制限が効かない）は配布前に必須。
 
 ### やらないこと（今回の範囲外）
 - React Native への移植（`docs/platform-strategy.md` の移行条件を満たしていない）
