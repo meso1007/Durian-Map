@@ -1,6 +1,6 @@
 # Durian Map - ToDo
 
-最終更新: 2026-09-14
+最終更新: 2026-09-15
 
 作業前に読むもの: [README.md](README.md) / [docs/platform-strategy.md](docs/platform-strategy.md) /
 [docs/design.md](docs/design.md)（UI を触るなら必読）
@@ -38,18 +38,15 @@
 
 ## 優先度：高
 
-- [ ] **同じ Worker を複数ワークツリーからデプロイしている**
-      `../iOS`（`GaloisExtension/iOS`）の `backend/wrangler.jsonc` も Worker 名が
-      `durian-map-api` で、デプロイし合うと互いの変更が消える。実際に一度上書きされた。
-      ブランチごとに検証するなら Worker 名か環境（`wrangler.jsonc` の `env`）を分ける
+- [x] **同じ Worker を複数ワークツリーからデプロイしている** → 2026-09-15 に
+      `GaloisExtension/iOS` を `feat/review-2026-09-15` に統合。以後は 1 ブランチ + PR で運用する
 - [ ] **Pages のプレビューデプロイが CORS で弾かれる**
       `backend/src/index.ts` の許可オリジン判定は**完全一致**なので、
       `https://<hash>.durian-map.pages.dev` からは検索できない。動作確認は本番 URL で行う。
       必要になったら `.durian-map.pages.dev` のサフィックス一致を足す
-- [ ] **フォント配信が重い**
-      `next/font/google` の M PLUS Rounded 1c が 505 スライス（`out/_next/static/media` に
-      7.7MB、`@font-face` 宣言だけで CSS 378KB）。ブラウザは必要な unicode-range しか
-      取りに行かないが、CSS 自体はレンダーブロッキング。日本語サブセットの絞り込みを検討
+- [x] **フォント配信が重い** → `preload: false` + ウェイト 400/500/700 に絞り、
+      `<link rel="preload">` 362 → 4 本。`static/media` の 5.8MB は unicode-range で必要分のみ取得。
+      Capacitor 同梱サイズを減らしたければ日本語サブセット化（P1）
 - [ ] **Google Cloud Console の API キー制限**
       - 地図用キー（`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`）に HTTP リファラー制限
       - Places 用キー（Worker の secret）に API 制限
@@ -64,26 +61,43 @@
       `backend/src/chains.ts` の `chainCafeNames` / `chainCafeDomains` に追記して
       `bun run deploy`。店名は部分一致・小文字化で比較するので、カタカナと英語の
       表記ゆれは両方入れる（現在 names 110 / domains 56）
-- [ ] **検索エリア入力のオートコンプリート**
-      現状はチップ（渋谷/新宿/池袋/東京）のみ
-- [ ] **並び替え（近い順・評価順）**
-      design.md の方針により「押せるのに効かない UI」は作らないため、
-      実装とセットで入れる
+- [ ] **検索エリア入力のオートコンプリート**（Autocomplete はセッション課金で $0。`docs/review-2026-09-15.md` P1）
+- [ ] **並び替え（評価順）**（近い順は実装済み）
+- [ ] **半径セレクタ UI / 初回オンボーディング**（デザインモック `designs/durian-map-ios.pen` にあり）
+- [ ] **Service Worker（Web のみ）**: App Shell + 保存一覧のオフライン表示。App Store 4.2 対策にも効く
+- [ ] **`google.maps.Marker` → `AdvancedMarker` + `mapId`**（地図スタイルのクラウド移行と同時）
 - [ ] **保存カフェの並び替え（保存順 / 名前順）**
       現在は「近い順」のみ（現在地があるとき）。`savedAt` を持つようにしたので
       保存順は実装できる
 
 ## 優先度：低
 
-- [ ] **自動テストの導入**
-      現在テストなし。まず `backend/src/chains.ts` の `isChainCafe()` が
-      対象として分かりやすい（純粋関数・ロジックの中核）
+- [x] **自動テストの導入** → backend に vitest（6 ファイル / 92 件）。フロントは未導入
+- [ ] **フロントのテスト**（hooks の単体テスト。`useCafeSearch` の競合・`useSearchUrlState` の往復から）
 - [ ] **写真の複数枚対応**
       現在は `photos[0]` のみ取得。増やすと Places の課金ティアに影響するので要検討
 - [ ] **クチコミの表示**
       デザイン案にはあるが `FIELD_MASK` に含めていない（課金ティアが上がる）
 
 ---
+
+## 完了済み（2026-09-15）
+
+総合レビュー `docs/review-2026-09-15.md` の P0 をすべて実装し本番へデプロイ。
+
+- [x] `GaloisExtension/iOS` を統合（Capacitor iOS / 静的書き出し / Pages）
+- [x] レート制限を Workers Rate Limiting binding に（KV 書き込み枯渇のカスケード解消）
+- [x] `category` 列挙化・`area` 正規化・半径 snap・座標 3 桁丸め・SHA-256 キャッシュキー
+- [x] 写真 URL の HMAC 署名（`PHOTO_SIGNING_KEY`）・サイズ列挙・KV 30 日キャッシュ
+- [x] `periods` から営業状態と `closesAt` / `opensAt` をサーバー計算。検索 TTL 7 日
+- [x] 日次予算ブレーカ（検索 300 / 写真 3,000）と Places 429 の伝播
+- [x] チェーン判定の NFKC 正規化・ホスト名判定・ローマ字補完（誤除外 / 素通りを修正）
+- [x] `/api/reverse-geocode`（Nominatim を Worker から）
+- [x] フォント preload 362 → 4、`page.tsx` 1,383 → 146 行（hooks 9 / components 16）
+- [x] URL を状態の正に（現在地検索の共有・リロード復元）、「このエリアで再検索」
+- [x] a11y（h1 / フォーカス管理 / tablist / aria-live / focus-visible / maximumScale 削除）
+- [x] カードに「21:00まで / 8:00から」と徒歩分
+- [x] デザインモック `designs/durian-map-ios.pen` / `designs/durian-map-web.pen`
 
 ## 完了済み（2026-09-13〜14）
 

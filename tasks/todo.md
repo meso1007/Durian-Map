@@ -357,12 +357,35 @@ UI が 549 行書き換わっても iOS 対応の再適用は `page.tsx` の 10 
 - [x] `GaloisExtension/iOS` を `feat/review-2026-09-15` に統合（CLAUDE.md は main 構造 + iOS 記述）
 - [x] レポート執筆 `docs/review-2026-09-15.md` + コスト試算 `tasks/cost_model.py`
 - [x] P0 バックエンド実装（Opus サブエージェント / 別ワークツリー）→ `67066d5` にマージ。typecheck / 92 tests 通過
-- [ ] P0 フロントエンド実装（Opus サブエージェント / 別ワークツリー）
-- [ ] 両ワークツリーをマージし `typecheck` / `test` / `lint` / `build:prod` を通す
-- [ ] Worker デプロイ（`PHOTO_SIGNING_KEY` secret 設定 → `/health` で確認）
-- [ ] Pages デプロイ → 本番で検索・写真・CORS・レート制限を確認
-- [ ] `.pen` デザインモック（iOS 版 / Web 版）を生成し PNG を確認
-- [ ] ToDo.md / tasks/lessons.md / README を更新して PR
+- [x] P0 フロントエンド実装（Opus サブエージェント / 別ワークツリー）→ `283828e` にマージ。lint / build:prod 通過、preload 4
+- [x] 両ワークツリーをマージし `typecheck` / `test`（92 件）/ `lint` / `build:prod` を通す
+- [x] Worker デプロイ（Version `b419d7bf`。`/health` で 2 つの secret が true）
+- [x] Pages デプロイ → 本番で検索 19 件 / 署名付き写真 19 枚 / URL 同期 / 再検索ピル / CORS（Pages・capacitor）を確認
+- [x] `.pen` デザインモック（iOS 版 6 画面 / Web 版 3 画面）を生成し PNG を確認
+- [x] ToDo.md / tasks/lessons.md / README を更新して PR
 
 ### レビュー
-（完了時に記入）
+
+**やったこと**: 現状把握 → 3 つのサブエージェント（料金調査 / backend security / frontend react）で
+独立レビュー → 指摘を本番とビルド成果物で再検証 → レポート → iOS ブランチ統合 → Opus 2 体で
+P0 を並行実装（別ワークツリー）→ 自分でマージ・検証 → Worker → Pages の順でデプロイ →
+puppeteer で本番を 390x844 / 1440x900 の両方から実操作して確認。
+
+**本番で確認できたこと**（2026-09-15 01:40 JST）:
+- `/health`: `googleApiKeyConfigured` / `photoSigningConfigured` ともに true
+- 渋谷で 19 件。全カードに署名付き写真と「〜まで / 〜から」。画面内に見えるカードはモバイル 3 / PC 7
+- 署名無し・不正署名の写真は 400。`category=ラーメン` は 400。空の `lat=&lng=` は area 検索に倒れる
+- 同一 3 桁セル + 半径 snap で 2 回目以降 `cached: true`
+- URL が `?area=渋谷&cafe=<id>` / `?tab=saved` に書き戻され、リロードで 19 件復元
+- 地図ドラッグで「このエリアで再検索」ピルが出る。CORS は Pages と `capacitor://localhost` を許可
+- コンソールエラーは Google Maps 内部の `transparent.png` の 1 件のみ（コード起因ではない）
+
+**判断したこと**:
+- 未マージの iOS ブランチが本番の実体だったので、レビューの前提として先に統合した
+- 写真キャッシュは R2 でなく KV にした（wrangler トークンに R2 権限が無い。P2 で移行）
+- 写真の署名鍵は専用 secret にした（`GOOGLE_API_KEY` の流用より運用が明確）
+- Worker を先にデプロイして数十秒だけ旧フロントの写真が出ない時間を許容した（Pages が続けて完了）
+
+**残したもの（ユーザー作業 / P1）**: Google Cloud のキー制限と予算アラート、iOS 用の地図キー、
+Co Headline のライセンス確認、実機での iOS 確認、旧 Cloudflare アカウントの後片付け。
+詳細は `docs/review-2026-09-15.md` §5 と `ToDo.md`。
