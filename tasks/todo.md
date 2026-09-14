@@ -356,7 +356,7 @@ UI が 549 行書き換わっても iOS 対応の再適用は `page.tsx` の 10 
 - [x] サブエージェントでバックエンド security review・フロント react review・料金調査
 - [x] `GaloisExtension/iOS` を `feat/review-2026-09-15` に統合（CLAUDE.md は main 構造 + iOS 記述）
 - [x] レポート執筆 `docs/review-2026-09-15.md` + コスト試算 `tasks/cost_model.py`
-- [ ] P0 バックエンド実装（Opus サブエージェント / 別ワークツリー）
+- [x] P0 バックエンド実装（Opus サブエージェント / 別ワークツリー）→ `67066d5` にマージ。typecheck / 92 tests 通過
 - [ ] P0 フロントエンド実装（Opus サブエージェント / 別ワークツリー）
 - [ ] 両ワークツリーをマージし `typecheck` / `test` / `lint` / `build:prod` を通す
 - [ ] Worker デプロイ（`PHOTO_SIGNING_KEY` secret 設定 → `/health` で確認）
