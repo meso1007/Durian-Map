@@ -208,3 +208,47 @@ Web と iOS は同一コードベースのままで、差分は `frontend/src/li
 - React Native への移植（`docs/platform-strategy.md` の移行条件を満たしていない）
 - Swift でのチェーン店判定の再実装（**禁止**。ロジックの正はサーバー側）
 - ダークモード対応、App Store 提出作業
+
+---
+
+## 2026-09-14: デザイン刷新（cloudflare-migration）の取り込みと iOS への反映
+
+`GaloisExtension/cloudflare-migration` の 2 コミット（静的書き出し + Pages デプロイ /
+`.pen` 準拠の UI 刷新）を iOS ブランチにマージし、iOS 側を新デザインに合わせた。
+
+### やったこと
+- [x] マージ（衝突 12 件）。UI・設定は向こうを土台にし、iOS 対応を再適用
+- [x] `page.tsx` の再適用: `lib/geolocation.ts` / `lib/share.ts` 経由、トースト、
+      ヘッダーのセーフエリア加算（下部タブバーは向こうが対応済みだった）
+- [x] `build:ios` を `build:prod` に乗せ、API URL の指定を二重に持たないようにした
+- [x] 共有 URL の土台に Pages の本番 URL を焼き込み（`NEXT_PUBLIC_WEB_BASE_URL`）
+- [x] アイコン / スプラッシュを新しい `public/logo.svg` から再生成し、生成手順を
+      `scripts/gen-ios-assets.mjs` に切り出した
+- [x] Worker を再デプロイ（`ALLOWED_ORIGINS` に Pages と capacitor の両方）
+- [x] コードレビュー指摘の反映（世代 ID / 未使用プラグインの削除）
+
+### 検証結果（iPhone 17 シミュレータ / iOS 26.2）
+
+| 項目 | 結果 |
+|---|---|
+| ビルド（SPM） | `** BUILD SUCCEEDED **` |
+| 新 UI の反映 | OK。ヘッダー検索 → 検索後に畳む → 下部タブバー |
+| 新ロゴ（`.pen` 由来の SVG） | OK。アプリアイコン・スプラッシュも再生成 |
+| 位置情報の許可ダイアログ | OK。`Info.plist` の日本語文言が表示される |
+| セーフエリア | OK。ヘッダー（上）・タブバー（下）とも潜らない |
+| 検索 → 結果カード | OK。渋谷 19 件、**カードが 2.5 枚見える**（刷新の狙いどおり） |
+| 営業状態の枠線・ピン枠 | OK。準備中がハイビスカス枠で出ている |
+| CORS（4 オリジン） | OK。Pages / capacitor / localhost は許可、他は拒否 |
+
+未確認（タップが要る）: 保存の永続化（再起動後）・共有シート・シートのスワイプ。
+
+### レビュー
+
+**危なかった点**: `ALLOWED_ORIGINS` を両ブランチが別々に編集して別々にデプロイしていたため、
+**後からデプロイしたほうが相手のオリジンを消していた**。マージ前の実測では
+`capacitor://localhost` が拒否される状態（= iOS アプリの検索が全滅）だった。
+→ 教訓を `tasks/lessons.md` に記録。
+
+**設計として良かった点**: プラットフォーム差分を `lib/` に閉じ込めていたおかげで、
+UI が 549 行書き換わっても iOS 対応の再適用は `page.tsx` の 10 箇所で済んだ。
+`lib/` の 4 ファイルは**一切変更不要**だった。
