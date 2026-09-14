@@ -4,10 +4,19 @@ import localFont from "next/font/local";
 import "./globals.css";
 
 // 日本語・本文（docs/design.md 2節）
+//
+// preload を切っているのは CJK フォントだから。next/font は日本語を数百の
+// unicode-range に分割するので、既定の preload: true だと <link rel="preload"> が
+// 350 本以上出て初回の帯域を地図と検索 API から奪う（実測 5.3MB）。
+// display: 'swap' + fallback があれば、必要な範囲だけ遅れて読み込まれる。
+// ウェイトは実際に使っている 3 つだけ（font-normal / font-medium / font-bold）。
 const rounded = M_PLUS_Rounded_1c({
   variable: "--font-sans",
   subsets: ["latin"],
-  weight: ["400", "500", "700", "800"],
+  weight: ["400", "500", "700"],
+  preload: false,
+  display: "swap",
+  fallback: ["Hiragino Sans", "Noto Sans JP", "sans-serif"],
 });
 
 // ロゴ・英字見出し・数値（Co Headline / Dalton Maag）
