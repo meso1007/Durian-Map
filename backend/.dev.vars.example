@@ -1,3 +1,6 @@
 # ローカル開発用。`.dev.vars` にコピーして値を入れる（.dev.vars はコミットしない）
-# 本番は `wrangler secret put GOOGLE_API_KEY` で設定する
+# 本番は `wrangler secret put <名前>` で設定する
 GOOGLE_API_KEY=
+# 写真 URL の HMAC 署名鍵。`openssl rand -hex 32` などで生成した十分長い乱数を入れる。
+# 未設定だと /api/photo は 500 を返す（署名を検証できないため）。
+PHOTO_SIGNING_KEY=

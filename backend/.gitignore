@@ -1,3 +1,10 @@
 node_modules/
 .wrangler/
+
+# ローカルの値はすべて .dev.vars に集約する（wrangler が読むのはこれ）。
+# .env は過去に生きたキーの複製ができていたので、名前ごと無視しておく。
 .dev.vars
+.dev.vars.*
+!.dev.vars.example
+.env
+.env.*
