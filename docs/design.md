@@ -1,6 +1,6 @@
 # Durian Map デザイン規約
 
-最終更新: 2026-09-13
+最終更新: 2026-09-14
 
 UI を実装・変更する人は、コードを書く前に必ずこのファイルを読むこと。
 色の具体値は **`docs/design-tokens.md` が正**（このファイルでは重複させない）。
@@ -67,14 +67,12 @@ UI を実装・変更する人は、コードを書く前に必ずこのファ�
   **Co Headline Bold** を指定する。
 - Geist は使わない。
 
-**現状と TODO**:
-`frontend/src/app/layout.tsx` では M PLUS Rounded 1c が `--font-geist-sans` という変数名で
-読み込まれており、`Geist_Mono` も残っている。Co Headline は**まだ未導入**。
+**現状**: 下記はすべて導入済み（`frontend/src/app/layout.tsx` / `globals.css`）。
 
-- [ ] `frontend/src/app/fonts/CoHeadline-{Light,Regular,Bold}.woff2` を配置
-- [ ] `next/font/local` で読み込み、CSS 変数 `--font-display` として公開
-- [ ] `--font-geist-sans` → `--font-sans` にリネーム、`Geist_Mono` を削除
-- [ ] `globals.css` の `@theme inline` に `--font-display` を追加
+- [x] `frontend/src/app/fonts/CoHeadline-{Light,Regular,Bold}.woff2` を配置
+- [x] `next/font/local` で読み込み、CSS 変数 `--font-display` として公開
+- [x] `--font-geist-sans` → `--font-sans` にリネーム、`Geist_Mono` を削除
+- [x] `globals.css` の `@theme inline` に `--font-display` を追加
 
 ### サイズ
 
@@ -155,16 +153,27 @@ UI を実装・変更する人は、コードを書く前に必ずこのファ�
 
 - このデザイン規約は **Web と iOS（Capacitor）で共通**。プラットフォームごとに分岐させない。
   → 方針の詳細は `docs/platform-strategy.md`。
-- セーフエリアを考慮する（`env(safe-area-inset-bottom)`）。特に下部タブバーとボトムシート。
+- セーフエリアを考慮する（`env(safe-area-inset-*)`）。特にヘッダーと下部タブバー・ボトムシート。
+  `layout.tsx` に `viewportFit: 'cover'` を入れてあるので `env()` は実値が入る
+  （Web では 0 になるだけなので、常に足しておいてよい）。
+  実装例: ヘッダーは `h-[calc(5rem_+_env(safe-area-inset-top))] pt-[env(safe-area-inset-top)]`。
 - iOS Safari のズームは無効化済み（`layout.tsx` の `maximumScale: 1`）。
   入力欄のフォントは **16px 以上**にする（未満だと iOS が自動ズームする）。
 - ダークモードは**現時点で対応しない**。ライトのみ。中途半端に `dark:` を足さないこと。
 
-## 7. 永続化
+## 7. 永続化とブラウザ API
 
-保存済みカフェなどの永続化は `frontend/src/lib/storage.ts` を通す。
-**UI コンポーネントから `localStorage` を直接呼ばないこと**（iOS で差し替えられなくなる）。
-API 呼び出しも同様に `frontend/src/lib/api.ts` を通す。→ `docs/platform-strategy.md`
+実体が Web と iOS で変わるものは `frontend/src/lib/` を必ず通す。
+**UI コンポーネントから直接呼ばないこと**（iOS で差し替えられなくなる）。
+
+| やりたいこと | 使うもの | 直接呼んではいけないもの |
+|---|---|---|
+| 保存済みカフェの読み書き | `lib/storage.ts` | `localStorage` |
+| 検索・写真 URL | `lib/api.ts` | `fetch` |
+| 現在地 | `lib/geolocation.ts` | `navigator.geolocation` |
+| 共有 | `lib/share.ts` | `navigator.share` / `clipboard` / `alert` |
+
+→ `docs/platform-strategy.md`
 
 ## 8. 変更するとき
 

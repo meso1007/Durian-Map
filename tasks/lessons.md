@@ -32,3 +32,38 @@ workers.dev のサブドメインも変わるので URL の総置換が必要。
 
 **ルール**: 報告された 1 件を直す前に、**同じ原因で起きうる箇所を機械的に全部列挙する**。
 サブエージェントの報告は網羅的とは限らない。
+
+## 2026-09-14: iOS（Capacitor）導入
+
+### Capacitor は CocoaPods なしで入る（SPM）
+
+Capacitor 7 以降は `npx cap add ios --packagemanager SPM` で Swift Package Manager を
+使える。公式プラグインはほぼ SPM 対応済み。このマシンは system Ruby が 2.6 で
+CocoaPods のインストールが面倒だったが、**そもそも入れる必要がなかった**。
+
+**ルール**: iOS のセットアップで CocoaPods に詰まったら、先に SPM で回避できないか見る。
+
+### WebView の Origin は `capacitor://localhost`
+
+サーバー側の CORS ホワイトリストに入れていないと、iOS からの API 呼び出しが全部
+落ちる。ブラウザでは起きず、アプリを動かして初めて分かる種類の不具合。
+`https://` 前提の制限（Google Maps の HTTP リファラー制限など）も同様に効かない。
+
+**ルール**: WebView で包むときは「オリジンが変わることで壊れるもの」を先に洗う
+（CORS / リファラー制限 / `window.location.origin` を使った URL 生成 / Cookie）。
+
+### `package.json` の `ignoreScripts` は後から効いてくる
+
+このリポジトリは `sharp` を `ignoreScripts` に入れているため、`@capacitor/assets`
+（アイコン生成）が「sharp のネイティブバイナリが無い」で落ちた。
+`node_modules/sharp` で `node install/libvips.js && node install/dll-copy.js` を
+一度走らせれば直る。→ `frontend/README.md` に記載。
+
+### シミュレータの自動操作には「アクセシビリティ」権限が要る
+
+`xcrun simctl` にはタップを送るコマンドが無く、`osascript` の click は
+補助アクセス（アクセシビリティ）権限が無いと `-25211` で失敗する。
+スクリーンショット（`xcrun simctl io <dev> screenshot`）とインストール/起動は権限なしで可能。
+
+**ルール**: シミュレータでの操作確認は、権限が無い前提で「起動時の描画」までを自動で確認し、
+タップが要る確認はユーザーに依頼するか、事前に権限を取っておく。

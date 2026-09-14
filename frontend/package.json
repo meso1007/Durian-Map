@@ -5,10 +5,19 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "build:ios": "NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-https://durian-map-api.dailyreading.workers.dev} next build && cap sync ios",
+    "ios": "cap open ios",
+    "ios:assets": "mkdir -p assets && cp public/logo.png assets/logo.png && capacitor-assets generate --ios --iconBackgroundColor '#FFF7E6' --iconBackgroundColorDark '#FFF7E6' --splashBackgroundColor '#FFF7E6' --splashBackgroundColorDark '#FFF7E6'"
   },
   "dependencies": {
+    "@capacitor/core": "^8",
+    "@capacitor/geolocation": "^8",
+    "@capacitor/ios": "^8",
+    "@capacitor/preferences": "^8",
+    "@capacitor/share": "^8",
+    "@capacitor/splash-screen": "^8",
+    "@capacitor/status-bar": "^8",
     "@googlemaps/markerclusterer": "^2.6.2",
     "@vis.gl/react-google-maps": "^1.7.1",
     "leaflet": "^1.9.4",
@@ -18,6 +27,9 @@
     "react-leaflet": "^5.0.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3",
+    "@capacitor/cli": "^8",
+    "@img/sharp-darwin-arm64": "^0.35.4",
     "@tailwindcss/postcss": "^4",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^20",

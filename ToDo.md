@@ -7,7 +7,7 @@
 
 ---
 
-## 進行中のマイルストーン: iOS 対応（Capacitor）
+## 完了したマイルストーン: iOS 対応（Capacitor）
 
 方針は `docs/platform-strategy.md`。**ロジック（API）は 1 つ、UI だけ 2 つ。**
 
@@ -16,12 +16,23 @@
       Next.js の `/api/search` は削除し Workers に一本化
 - [x] **2. localStorage を抽象化する**
       `frontend/src/lib/storage.ts`。UI 層からの直呼びは 0 件
-- [ ] **3. Capacitor 導入** ← 次はこれ
-      - `@capacitor/core` / `@capacitor/ios` の導入と `npx cap add ios`
-      - Next.js を静的書き出し（`output: 'export'`）できるか検証
-        → 現状 `/` は既に static prerender なので見込みはある
-      - セーフエリア・スクロールの実機確認
-      - App Store 用のアイコン・スプラッシュ
+- [x] **3. Capacitor 導入**（2026-09-14）
+      `frontend/capacitor.config.ts` / `frontend/ios/`。ビルドは `bun run build:ios`。
+      依存は **SPM**（CocoaPods 不要）。詳細は `frontend/README.md`
+
+## 次のマイルストーン: iOS の配布
+
+- [ ] **Google Cloud で iOS 用の地図キーを作る** ← 先にこれ
+      `capacitor://` には HTTP リファラー制限が効かない。Maps JavaScript API だけに
+      絞った専用キーを作り、1 日の割当上限を設定して `.env.local` を切り替える
+- [ ] **実機での確認**（シミュレータでは確認済み）
+      位置情報の許可ダイアログ、共有シート、保存の永続化（アプリ再起動後）
+- [ ] **App Store 提出の準備**
+      Apple Developer の署名設定、スクリーンショット、プライバシー情報
+      （収集データ: 位置情報 — 端末内のみで使用し送信しない、を申告）
+- [ ] **アプリ内の共有 URL**
+      Web を本番デプロイしたら `NEXT_PUBLIC_WEB_BASE_URL` を設定する。
+      未設定の間は Google マップの URL を共有している
 
 ---
 

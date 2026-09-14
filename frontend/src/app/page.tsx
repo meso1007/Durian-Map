@@ -7,6 +7,9 @@ import { useSearchParams } from 'next/navigation';
 
 import { ApiError, getCafePhotoUrl, searchCafes } from '@/lib/api';
 import type { Cafe, Coordinates } from '@/lib/api';
+import { GeolocationError, getCurrentPosition } from '@/lib/geolocation';
+import { isNativePlatform } from '@/lib/platform';
+import { shareUrl } from '@/lib/share';
 import { loadSavedCafes, saveSavedCafes } from '@/lib/storage';
 
 const MapView = dynamic(() => import('./components/MapView'), {
@@ -26,11 +29,19 @@ const getCafeMapUrl = (cafe: Cafe) =>
   `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cafe.name)}&query_place_id=${cafe.id}`;
 
 const getCafeShareUrl = (cafe: Cafe, area: string) => {
-  if (typeof window === 'undefined' || !area.trim()) {
+  // ネイティブアプリの origin は capacitor://localhost で、共有先では開けない。
+  // Web を本番デプロイしたら NEXT_PUBLIC_WEB_BASE_URL にその URL を入れる。
+  const webBaseUrl = isNativePlatform()
+    ? process.env.NEXT_PUBLIC_WEB_BASE_URL?.replace(/\/$/, '')
+    : typeof window === 'undefined'
+      ? null
+      : window.location.origin;
+
+  if (!webBaseUrl || !area.trim()) {
     return getCafeMapUrl(cafe);
   }
 
-  return `${window.location.origin}/?area=${encodeURIComponent(area)}&cafeId=${cafe.id}`;
+  return `${webBaseUrl}/?area=${encodeURIComponent(area)}&cafeId=${cafe.id}`;
 };
 
 const getCafeDomain = (cafe: Cafe) => {
@@ -134,7 +145,10 @@ function CafeFinderContent() {
   const [savedCafes, setSavedCafes] = useState<Cafe[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectionSource, setSelectionSource] = useState<'map' | 'list' | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // トースト。エラーは --dm-error、完了の通知は --dm-success（docs/design-tokens.md）。
+  const [toast, setToast] = useState<{ message: string; tone: 'error' | 'success' } | null>(null);
+  const showError = useCallback((message: string) => setToast({ message, tone: 'error' }), []);
+  const showNotice = useCallback((message: string) => setToast({ message, tone: 'success' }), []);
 
   // モバイル用ボトムシートの状態
   const [sheetState, setSheetState] = useState<'half' | 'full'>('half');
@@ -178,13 +192,13 @@ function CafeFinderContent() {
     focusCafe(id, 'map', false);
   }, [focusCafe]);
 
-  // エラートーストの自動非表示
+  // トーストの自動非表示
   useEffect(() => {
-    if (errorMsg) {
-      const timer = setTimeout(() => setErrorMsg(null), 4000);
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 4000);
       return () => clearTimeout(timer);
     }
-  }, [errorMsg]);
+  }, [toast]);
 
   // 保存済みカフェをマウント後に復元（SSRとのハイドレーション不一致を防ぐ）
   useEffect(() => {
@@ -230,10 +244,10 @@ function CafeFinderContent() {
       coordinates,
       radius,
     });
-    if (error) setErrorMsg(error);
+    if (error) showError(error);
     setResults(data);
     setIsLoading(false);
-  }, []);
+  }, [showError]);
 
   // URLパラメータからの初期ロード処理
   useEffect(() => {
@@ -259,58 +273,54 @@ function CafeFinderContent() {
     void loadFromUrl();
   }, [searchParams, search, hasSearched]);
 
-  const updateCurrentLocation = useCallback((options: { searchNearby?: boolean; silent?: boolean } = {}) => {
+  // 位置情報の取得は lib/geolocation.ts を通す（iOS では Capacitor のプラグインに
+  // 差し替わる）。ここで navigator.geolocation を直接呼ばないこと。
+  const updateCurrentLocation = useCallback(async (options: { searchNearby?: boolean; silent?: boolean } = {}) => {
     const { searchNearby = false, silent = false } = options;
-
-    if (!navigator.geolocation) {
-      if (!silent) {
-        setErrorMsg('お使いのブラウザは位置情報取得に対応していません。');
-      }
-      return;
-    }
 
     if (searchNearby) {
       setIsLocating(true);
     }
 
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setCurrentLocation(coords);
-        void syncAreaFromCoords(coords, searchNearby);
+    try {
+      const coords = await getCurrentPosition();
 
-        if (!searchNearby) {
-          return;
-        }
+      setCurrentLocation(coords);
+      void syncAreaFromCoords(coords, searchNearby);
 
+      if (!searchNearby) {
+        return;
+      }
+
+      setIsLocating(false);
+      void search({
+        coordinates: coords,
+        radius: DEFAULT_NEARBY_RADIUS_METERS,
+      });
+    } catch (error) {
+      if (searchNearby) {
         setIsLocating(false);
-        void search({
-          coordinates: coords,
-          radius: DEFAULT_NEARBY_RADIUS_METERS,
-        });
-      },
-      () => {
-        if (searchNearby) {
-          setIsLocating(false);
-        }
-        if (!silent) {
-          setErrorMsg('現在地を取得できませんでした。端末とブラウザの位置情報権限をご確認ください。');
-        }
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
-  }, [search, syncAreaFromCoords]);
+      }
+      if (!silent) {
+        showError(
+          error instanceof GeolocationError
+            ? error.message
+            : '現在地を取得できませんでした。端末の位置情報権限をご確認ください。',
+        );
+      }
+    }
+  }, [search, showError, syncAreaFromCoords]);
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {
-      updateCurrentLocation({ silent: true });
+      void updateCurrentLocation({ silent: true });
     }, 0);
 
     return () => window.clearTimeout(timerId);
   }, [updateCurrentLocation]);
 
   const handleLocate = () => {
-    updateCurrentLocation({ searchNearby: true });
+    void updateCurrentLocation({ searchNearby: true });
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -353,24 +363,28 @@ function CafeFinderContent() {
 
   return (
     <div className="h-[100dvh] w-full flex flex-col overflow-hidden bg-surface text-text relative isolate">
-      {/* エラートースト通知 */}
+      {/* トースト通知（エラー / 完了） */}
       <div
         role="status"
         aria-live="polite"
-        className={`fixed top-24 left-1/2 -translate-x-1/2 z-50 transition-opacity duration-300 pointer-events-none w-[calc(100%-2rem)] md:w-auto flex justify-center ${errorMsg ? 'opacity-100' : 'opacity-0'}`}
+        className={`fixed left-1/2 -translate-x-1/2 z-50 transition-opacity duration-300 pointer-events-none w-[calc(100%-2rem)] md:w-auto flex justify-center ${toast ? 'opacity-100' : 'opacity-0'}`}
+        style={{ top: 'calc(6rem + env(safe-area-inset-top))' }}
       >
-        {errorMsg && (
-          <div className="bg-error text-white px-4 py-3 rounded-xl shadow-card text-sm font-bold flex items-center gap-2 max-w-md">
+        {toast && (
+          <div
+            className={`${toast.tone === 'error' ? 'bg-error' : 'bg-success'} text-white px-4 py-3 rounded-xl shadow-card text-sm font-bold flex items-center gap-2 max-w-md`}
+          >
             <AlertIcon />
-            <span>{errorMsg}</span>
+            <span>{toast.message}</span>
           </div>
         )}
       </div>
 
-      {/* ヘッダー (常に上部固定) */}
-      <header className="absolute top-0 left-0 right-0 h-20 md:h-[5.5rem] bg-primary rounded-b-[24px] z-40 flex items-center gap-3 px-4 md:px-6">
+      {/* ヘッダー (常に上部固定)。ノッチ/Dynamic Island の下に潜らないよう
+          セーフエリア分を上に足す（iOS。Web では env() が 0 なので変化なし） */}
+      <header className="absolute top-0 left-0 right-0 h-[calc(5rem_+_env(safe-area-inset-top))] md:h-[calc(5.5rem_+_env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-primary rounded-b-[24px] z-40 flex items-center gap-3 px-4 md:px-6">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface">
-          <Image src="/logo.png" alt="" width={44} height={44} priority className="w-9 h-9 object-contain" />
+          <Image src="/logo-192.png" alt="" width={44} height={44} priority className="w-9 h-9 object-contain" />
         </div>
         <div className="min-w-0">
           <p className="font-display text-xl md:text-2xl font-bold text-white leading-tight">Durian Map</p>
@@ -379,7 +393,7 @@ function CafeFinderContent() {
       </header>
 
       {/* ベース用コンテナ (PCはフレックス、モバイルは重ね合わせ) */}
-      <div className="flex-1 w-full flex md:flex-row mt-[4.5rem] md:mt-[5.25rem] overflow-hidden relative">
+      <div className="flex-1 w-full flex md:flex-row mt-[calc(4.5rem_+_env(safe-area-inset-top))] md:mt-[calc(5.25rem_+_env(safe-area-inset-top))] overflow-hidden relative">
 
         {/* マップ (モバイルでは背景、PCでは右側) */}
         <div
@@ -519,6 +533,7 @@ function CafeFinderContent() {
                   isSaved={savedCafes.some((cafe) => cafe.id === selectedCafe.id)}
                   onToggleSave={() => toggleSave(selectedCafe)}
                   onClose={clearSelectedCafe}
+                  onNotify={showNotice}
                 />
               </div>
             )}
@@ -691,34 +706,30 @@ function RatingStars({ rating }: { rating: number }) {
   );
 }
 
-function SelectedCafePanel({ cafe, area, distance, isSaved, onToggleSave, onClose }: {
+function SelectedCafePanel({ cafe, area, distance, isSaved, onToggleSave, onClose, onNotify }: {
   cafe: Cafe;
   area: string;
   distance: number | null;
   isSaved: boolean;
   onToggleSave: () => void;
   onClose: () => void;
+  /** 共有シートが使えずクリップボードに退避したときの通知。 */
+  onNotify: (message: string) => void;
 }) {
   const mapUrl = getCafeMapUrl(cafe);
   const domain = getCafeDomain(cafe);
   const photoUrl = getCafePhotoUrl(cafe);
   const categoryLabel = getCategoryLabel(cafe.category);
 
+  // 共有は lib/share.ts を通す（iOS ではネイティブの共有シートに差し替わる）。
   const handleShare = async () => {
-    const shareUrl = getCafeShareUrl(cafe, area);
+    const result = await shareUrl({ title: cafe.name, url: getCafeShareUrl(cafe, area) });
 
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: cafe.name,
-          url: shareUrl,
-        });
-      } catch { }
-      return;
+    if (result === 'copied') {
+      onNotify('URLをコピーしました');
+    } else if (result === 'failed') {
+      onNotify('共有できませんでした');
     }
-
-    await navigator.clipboard.writeText(shareUrl);
-    alert('URLをコピーしました！');
   };
 
   return (
