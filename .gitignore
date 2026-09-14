@@ -12,3 +12,9 @@ frontend/.env.local
 .env
 .env.local
 .env*.local
+
+# macOS
+.DS_Store
+
+# ローカル作業用のスクリーンショット（Codex セッション）
+.codex-screens/

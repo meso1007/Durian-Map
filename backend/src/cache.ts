@@ -7,8 +7,9 @@ const SEARCH_TTL_SECONDS = 60 * 60 * 24; // 24 時間
  * Lead のスキーマ版。**Lead にフィールドを足したら必ず上げること。**
  * 上げないと、旧スキーマのキャッシュが TTL 切れまで新フィールド抜きで返り続ける。
  * v2: weekdayDescriptions / phone を追加
+ * v3: priceLevel を追加
  */
-const SCHEMA_VERSION = 'v2';
+const SCHEMA_VERSION = 'v3';
 
 /**
  * 検索条件からキャッシュキーを作る。

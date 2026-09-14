@@ -16,6 +16,15 @@ import { isNativePlatform } from './platform';
 
 const SAVED_CAFES_KEY = 'saved_cafes';
 
+/** 保存したカフェの状態。デザイン案の保存画面のセグメントに対応する。 */
+export type SavedStatus = 'want' | 'visited';
+
+export type SavedCafe = Cafe & {
+    status: SavedStatus;
+    /** ISO 8601。保存順の並び替えに使う。 */
+    savedAt: string;
+};
+
 /** SSR 中やプライベートブラウジングでも落ちないようにする。 */
 function getStore(): Storage | null {
     try {
@@ -55,8 +64,13 @@ async function writeRaw(value: string): Promise<void> {
     store?.setItem(SAVED_CAFES_KEY, value);
 }
 
-/** 保存済みカフェを読み出す。壊れたデータは空配列として扱う。 */
-export async function loadSavedCafes(): Promise<Cafe[]> {
+/**
+ * 保存済みカフェを読み出す。壊れたデータは空配列として扱う。
+ *
+ * status を持たない旧形式（Cafe[] をそのまま入れていた頃のデータ）は
+ * 「行きたい」として読み込む。既存ユーザーの保存を消さないため。
+ */
+export async function loadSavedCafes(): Promise<SavedCafe[]> {
     try {
         const raw = await readRaw();
         if (!raw) return [];
@@ -66,14 +80,14 @@ export async function loadSavedCafes(): Promise<Cafe[]> {
         // 壊れたデータや古い形式で UI を落とさない。
         if (!Array.isArray(parsed)) return [];
 
-        return parsed.filter(isCafe);
+        return parsed.filter(isCafeLike).map(migrate);
     } catch {
         return [];
     }
 }
 
 /** 保存済みカフェを書き込む。容量超過などで失敗しても例外は投げない。 */
-export async function saveSavedCafes(cafes: Cafe[]): Promise<void> {
+export async function saveSavedCafes(cafes: SavedCafe[]): Promise<void> {
     try {
         await writeRaw(JSON.stringify(cafes));
     } catch (error) {
@@ -82,8 +96,17 @@ export async function saveSavedCafes(cafes: Cafe[]): Promise<void> {
     }
 }
 
-function isCafe(value: unknown): value is Cafe {
+function isCafeLike(value: unknown): value is Cafe & Partial<SavedCafe> {
     if (typeof value !== 'object' || value === null) return false;
     const candidate = value as Partial<Cafe>;
     return typeof candidate.id === 'string' && typeof candidate.name === 'string';
+}
+
+/** 旧形式（status / savedAt なし）を現行スキーマに寄せる。 */
+function migrate(value: Cafe & Partial<SavedCafe>): SavedCafe {
+    return {
+        ...value,
+        status: value.status === 'visited' ? 'visited' : 'want',
+        savedAt: typeof value.savedAt === 'string' ? value.savedAt : new Date(0).toISOString(),
+    };
 }

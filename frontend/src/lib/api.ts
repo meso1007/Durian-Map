@@ -23,6 +23,8 @@ export type Cafe = {
     weekdayDescriptions?: string[];
     /** 国内向け表記の電話番号。 */
     phone?: string;
+    /** PRICE_LEVEL_INEXPENSIVE 〜 PRICE_LEVEL_VERY_EXPENSIVE。価格フィルタが使う。 */
+    priceLevel?: string;
     /** Places の写真リソース名。表示は getCafePhotoUrl() を通す。 */
     photoName?: string;
 };

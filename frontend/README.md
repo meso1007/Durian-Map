@@ -37,7 +37,7 @@ API は別プロセス。`cd ../backend && bun run dev`（http://localhost:8787�
 | `bun run deploy` | 本番ビルド → Cloudflare Pages へアップロード |
 | `bun run build:ios` | 本番ビルド → iOS プロジェクトへ同期（`cap sync`） |
 | `bun run ios` | Xcode で iOS プロジェクトを開く |
-| `bun run ios:assets` | `public/logo.svg` からアイコン / スプラッシュを再生成 |
+| `bun run ios:assets` | `.pen` 由来の SVG から iOS のアイコン / スプラッシュを再生成 |
 | `bun run lint` | ESLint |
 
 `next start` は無い。静的書き出しにサーバーは存在しないため。
@@ -91,8 +91,15 @@ xcrun simctl launch booted com.durianmap.app
 
 ### アイコン / スプラッシュ
 
-ロゴの正は `public/logo.svg`。素材を差し替えたら `bun run ios:assets` で再生成する
-（`scripts/gen-ios-assets.mjs` が 1024px に起こして `@capacitor/assets` に渡す）。
+素材の正は `designs/durian-map-tropical.pen`。`.pen` を直したら
+`designs/pen-frame-to-svg.py` で SVG を起こし直し、`bun run ios:assets` を流す。
+
+`scripts/gen-ios-assets.mjs` が **変種を使い分けている**（docs/design-tokens.md）:
+
+| 用途 | 元 | 理由 |
+|---|---|---|
+| アプリアイコン | `src/app/icon.svg`（App Icon フレーム） | 角丸は iOS が付けるので `rx` を落とし、アルファを潰して全面ベタにする（透明が残ると審査で弾かれる） |
+| スプラッシュ | `public/logo-light.svg`（Light 変種） | 地がクリームなので濃緑のマークを使う。Dark 変種は淡色マークで**クリーム地では見えない** |
 
 > sharp は `package.json` の `ignoreScripts` に入っているため、`bun install` 直後は
 > ネイティブバイナリが無くて失敗する。その場合は
