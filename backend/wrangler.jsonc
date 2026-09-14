@@ -17,7 +17,7 @@
     {
       // 検索結果キャッシュ + レート制限カウンタ
       "binding": "CACHE",
-      "id": "6c8042ead3794ef0bee3f3433a56fbb7"
+      "id": "53d639907024463b8b32cbd591ca430c"
     }
   ]
   // GOOGLE_API_KEY は secret。`wrangler secret put GOOGLE_API_KEY` で設定する（ここには書かない）。

@@ -3,7 +3,7 @@
 検索 API の実装。**チェーン店判定ロジックの唯一の正はここ**（`src/chains.ts`）。
 フロントエンドや iOS 側で同じ判定を書き直さないこと → `docs/platform-strategy.md`
 
-- 本番: https://durian-map-api.itto-hp.workers.dev
+- 本番: https://durian-map-api.dailyreading.workers.dev
 - ランタイム: Cloudflare Workers / Hono v4 / zod
 
 ## エンドポイント

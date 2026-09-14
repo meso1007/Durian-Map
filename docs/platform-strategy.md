@@ -45,7 +45,7 @@ B を採る理由:
 ## いまやっておく準備（C への移行コストを下げる）
 
 - [x] **1. API を「独立したエンドポイント」として切り出す** — 完了
-      Cloudflare Workers（`backend/`）にデプロイ済み: https://durian-map-api.itto-hp.workers.dev
+      Cloudflare Workers（`backend/`）にデプロイ済み: https://durian-map-api.dailyreading.workers.dev
       Next.js の `/api/search` Route Handler は廃止し、Workers に一本化した。
       フロントは `NEXT_PUBLIC_API_BASE_URL` 経由で叩く（`frontend/src/lib/api.ts`）。
 - [ ] **2. localStorage 依存を抽象化する**
@@ -58,7 +58,7 @@ B を採る理由:
 
 | レイヤ | 環境 | URL |
 |---|---|---|
-| API | Cloudflare Workers（`durian-map-api`） | https://durian-map-api.itto-hp.workers.dev |
+| API | Cloudflare Workers（`durian-map-api`） | https://durian-map-api.dailyreading.workers.dev |
 | フロント | 未デプロイ（Vercel 想定） | — |
 
 **フロントを本番デプロイしたら、その URL を `backend/wrangler.jsonc` の `ALLOWED_ORIGINS` に
