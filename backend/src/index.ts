@@ -14,6 +14,16 @@ const MAX_NEARBY_RADIUS_METERS = 50000; // Places API の上限
 /** 開発時のフロントエンド。ALLOWED_ORIGINS 未設定でも動くようにしておく。 */
 const DEV_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000'];
 
+/**
+ * ネイティブアプリ（Capacitor の WebView）の Origin。
+ *
+ * これは環境ごとに変わる値ではなく iOS アプリそのものの Origin なので、
+ * ALLOWED_ORIGINS（環境変数）ではなくここに置いて**常に許可**する。
+ * 環境変数に入れていた頃は、別ブランチが ALLOWED_ORIGINS を編集してデプロイする
+ * たびに消えて iOS アプリの検索が落ちていた。→ tasks/lessons.md
+ */
+const NATIVE_APP_ORIGINS = ['capacitor://localhost'];
+
 const app = new Hono<{ Bindings: Env }>();
 
 // --- CORS ---------------------------------------------------------------
@@ -25,7 +35,8 @@ app.use(
             const configured = c.env.ALLOWED_ORIGINS?.split(',')
                 .map((o: string) => o.trim())
                 .filter(Boolean);
-            const allowed = configured?.length ? configured : DEV_ORIGINS;
+            const configuredOrDev = configured?.length ? configured : DEV_ORIGINS;
+            const allowed = [...configuredOrDev, ...NATIVE_APP_ORIGINS];
             return allowed.includes(origin) ? origin : null;
         },
         allowMethods: ['GET', 'OPTIONS'],
@@ -169,6 +180,9 @@ function toLead(category: string) {
         rating: place.rating,
         userRatingCount: place.userRatingCount,
         openNow: place.regularOpeningHours?.openNow,
+        weekdayDescriptions: place.regularOpeningHours?.weekdayDescriptions,
+        phone: place.nationalPhoneNumber,
+        priceLevel: place.priceLevel,
         photoName: place.photos?.[0]?.name,
     });
 }

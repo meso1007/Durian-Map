@@ -43,16 +43,48 @@ const MAP_STYLE = [
   { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
 ];
 
-const MARKER_ICON = '/marker.svg';
-const MARKER_ICON_SELECTED = '/marker-selected.svg';
 const MARKER_SIZE = 42;
 const MARKER_SIZE_SELECTED = 52;
 
-const createCafeMarkerIcon = (selected: boolean, sizeOverride?: number): google.maps.Icon => {
+/**
+ * 営業状態 → ピンの枠色。カードの枠線と同じ意味で使う。
+ * → docs/design-tokens.md「営業状態の表現」
+ */
+const statusRingColor = (openNow?: boolean) => {
+  if (openNow === undefined) return '#FFFFFF';
+  // ピン本体が黄緑(#8FC63C)なので、営業中は --durian-green-900 まで落とさないと枠が埋もれる。
+  return openNow ? '#14532D' : '#E2467C'; // --durian-green-900 / --tropic-hibiscus-500
+};
+
+/**
+ * ピンを SVG の data URI として組み立てる。
+ * 静的ファイルを状態の数だけ用意するより、枠色だけ差し替えるほうが増やしやすい。
+ * 絵柄は従来の marker.svg（ドリアン）を踏襲。
+ */
+const buildMarkerSvg = (openNow: boolean | undefined, selected: boolean) => {
+  const ring = statusRingColor(openNow);
+  const body = selected ? '#F4D964' : '#8FC63C';
+  const seed = selected ? '#274017' : '#284117';
+  const spike = selected ? '#FFF8D5' : '#FFF2AE';
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+    <path d="M32 5 C19.3 5 9 15.3 9 28 C9 42.6 32 62.5 32 62.5 C32 62.5 55 42.6 55 28 C55 15.3 44.7 5 32 5 Z"
+          fill="${body}" stroke="${ring}" stroke-width="4" stroke-linejoin="round"/>
+    <circle cx="32" cy="26" r="12" fill="${seed}"/>
+    <path d="M30.8 14.6C30.8 13.4 31.8 12.4 33 12.4H34.2V16H30.2L30.8 14.6Z" fill="${spike}"/>
+    <path d="M32 16L34.8 18.5L38.8 17.8L39.8 21.7L43.8 23.1L42.3 26.7L44.8 30L41.4 32.4L41 36.3L37 36.5L34.5 39.5L32 37.8L29.5 39.5L27 36.5L23 36.3L22.6 32.4L19.2 30L21.7 26.7L20.2 23.1L24.2 21.7L25.2 17.8L29.2 18.5L32 16Z" fill="${spike}"/>
+  </svg>`;
+};
+
+const createCafeMarkerIcon = (
+  openNow: boolean | undefined,
+  selected: boolean,
+  sizeOverride?: number,
+): google.maps.Icon => {
   const size = sizeOverride ?? (selected ? MARKER_SIZE_SELECTED : MARKER_SIZE);
 
   return {
-    url: selected ? MARKER_ICON_SELECTED : MARKER_ICON,
+    url: `data:image/svg+xml,${encodeURIComponent(buildMarkerSvg(openNow, selected))}`,
     scaledSize: new google.maps.Size(size, size),
     anchor: new google.maps.Point(size / 2, size),
   };
@@ -124,7 +156,15 @@ function MapController({
       bounds.extend(currentLocation);
     }
     validCafes.forEach((cafe) => bounds.extend({ lat: cafe.lat!, lng: cafe.lng! }));
-    map.fitBounds(bounds, emphasizeCurrentLocation && currentLocation ? 96 : 72);
+
+    // 余白が地図の高さを食い潰すと fitBounds は極端に引いた絵になる。
+    // ボトムシートが開いていると地図は 100px 程度まで縮むので、短辺に対して上限をかける。
+    const desired = emphasizeCurrentLocation && currentLocation ? 96 : 72;
+    const el = map.getDiv();
+    const shortSide = Math.min(el.clientWidth || 0, el.clientHeight || 0);
+    const padding = shortSide > 0 ? Math.max(8, Math.min(desired, Math.floor(shortSide * 0.18))) : desired;
+
+    map.fitBounds(bounds, padding);
   }, [cafes, selectedId, currentLocation, emphasizeCurrentLocation, map]);
 
   return null;
@@ -197,7 +237,7 @@ function CafeMarkers({
       const marker = new google.maps.Marker({
         position: { lat: cafe.lat!, lng: cafe.lng! },
         title: cafe.name,
-        icon: createCafeMarkerIcon(false),
+        icon: createCafeMarkerIcon(cafe.openNow, false),
         zIndex: 20,
       });
 
@@ -227,7 +267,7 @@ function CafeMarkers({
         map,
         position: { lat: selectedCafe.lat!, lng: selectedCafe.lng! },
         title: selectedCafe.name,
-        icon: createCafeMarkerIcon(true, startSize),
+        icon: createCafeMarkerIcon(selectedCafe.openNow, true, startSize),
         zIndex: 120,
         opacity: 0.82,
       });
@@ -242,7 +282,7 @@ function CafeMarkers({
         const eased = 1 - ((1 - progress) ** 3);
         const currentSize = startSize + ((MARKER_SIZE_SELECTED - startSize) * eased);
 
-        selectedMarker.setIcon(createCafeMarkerIcon(true, Math.round(currentSize)));
+        selectedMarker.setIcon(createCafeMarkerIcon(selectedCafe.openNow, true, Math.round(currentSize)));
         selectedMarker.setOpacity(0.82 + (0.18 * eased));
 
         if (progress < 1) {
@@ -312,7 +352,7 @@ export default function MapView({
 }: Props) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
   const defaultCenter = currentLocation ?? { lat: 35.6762, lng: 139.6503 };
-  const defaultZoom = currentLocation ? 15 : 12;
+  const defaultZoom = currentLocation ? 15 : 13;
 
   if (!apiKey) {
     return (

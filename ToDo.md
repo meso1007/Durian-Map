@@ -7,7 +7,7 @@
 
 ---
 
-## 進行中のマイルストーン: iOS 対応（Capacitor）
+## 完了したマイルストーン: iOS 対応（Capacitor）
 
 方針は `docs/platform-strategy.md`。**ロジック（API）は 1 つ、UI だけ 2 つ。**
 
@@ -16,21 +16,40 @@
       Next.js の `/api/search` は削除し Workers に一本化
 - [x] **2. localStorage を抽象化する**
       `frontend/src/lib/storage.ts`。UI 層からの直呼びは 0 件
-- [ ] **3. Capacitor 導入** ← 次はこれ
-      - `@capacitor/core` / `@capacitor/ios` の導入と `npx cap add ios`
-      - Next.js を静的書き出し（`output: 'export'`）できるか検証
-        → 現状 `/` は既に static prerender なので見込みはある
-      - セーフエリア・スクロールの実機確認
-      - App Store 用のアイコン・スプラッシュ
+- [x] **3. Next.js の静的書き出し（`output: 'export'`）**
+      Cloudflare Pages への移行と同時に完了。`frontend/next.config.ts`。
+      サーバー機能は元から不使用で、詰まったのは画像最適化のみ（`images.unoptimized`）
+- [x] **4. Capacitor 導入**（2026-09-14）
+      `frontend/capacitor.config.ts` / `frontend/ios/`。ビルドは `bun run build:ios`。
+      依存は **SPM**（CocoaPods 不要）。詳細は `frontend/README.md`
+
+## 次のマイルストーン: iOS の配布
+
+- [ ] **Google Cloud で iOS 用の地図キーを作る** ← 先にこれ
+      `capacitor://` には HTTP リファラー制限が効かない。Maps JavaScript API だけに
+      絞った専用キーを作り、1 日の割当上限を設定して `.env.local` を切り替える
+- [ ] **実機での確認**（シミュレータでは確認済み）
+      位置情報の許可ダイアログ、共有シート、保存の永続化（アプリ再起動後）
+- [ ] **App Store 提出の準備**
+      Apple Developer の署名設定、スクリーンショット、プライバシー情報
+      （収集データ: 位置情報 — 端末内のみで使用し送信しない、を申告）
 
 ---
 
 ## 優先度：高
 
-- [ ] **フロントエンドの本番デプロイ（Vercel 想定）**
-      デプロイ後、**`backend/wrangler.jsonc` の `ALLOWED_ORIGINS` にその URL を追加して
-      `cd backend && bun run deploy`**。現在は localhost のみ許可なので、忘れると本番で
-      CORS に弾かれる
+- [ ] **同じ Worker を複数ワークツリーからデプロイしている**
+      `../iOS`（`GaloisExtension/iOS`）の `backend/wrangler.jsonc` も Worker 名が
+      `durian-map-api` で、デプロイし合うと互いの変更が消える。実際に一度上書きされた。
+      ブランチごとに検証するなら Worker 名か環境（`wrangler.jsonc` の `env`）を分ける
+- [ ] **Pages のプレビューデプロイが CORS で弾かれる**
+      `backend/src/index.ts` の許可オリジン判定は**完全一致**なので、
+      `https://<hash>.durian-map.pages.dev` からは検索できない。動作確認は本番 URL で行う。
+      必要になったら `.durian-map.pages.dev` のサフィックス一致を足す
+- [ ] **フォント配信が重い**
+      `next/font/google` の M PLUS Rounded 1c が 505 スライス（`out/_next/static/media` に
+      7.7MB、`@font-face` 宣言だけで CSS 378KB）。ブラウザは必要な unicode-range しか
+      取りに行かないが、CSS 自体はレンダーブロッキング。日本語サブセットの絞り込みを検討
 - [ ] **Google Cloud Console の API キー制限**
       - 地図用キー（`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`）に HTTP リファラー制限
       - Places 用キー（Worker の secret）に API 制限
@@ -50,9 +69,9 @@
 - [ ] **並び替え（近い順・評価順）**
       design.md の方針により「押せるのに効かない UI」は作らないため、
       実装とセットで入れる
-- [ ] **保存カフェの状態管理（行きたい / 訪問済み）**
-      デザイン案にはあるが、状態を持っていないため未実装。
-      実装するなら `lib/storage.ts` のスキーマ拡張から
+- [ ] **保存カフェの並び替え（保存順 / 名前順）**
+      現在は「近い順」のみ（現在地があるとき）。`savedAt` を持つようにしたので
+      保存順は実装できる
 
 ## 優先度：低
 
@@ -78,6 +97,19 @@
 - [x] 地図スタイルをデザイントークンの南国ライトへ
 - [x] バッジのコントラスト比を 4.5:1 以上に修正（営業中 5.51 / 準備中 5.44）
 - [x] `lib/api.ts` / `lib/storage.ts` による接続・永続化レイヤーの分離
+- [x] フロントを静的書き出し化し Cloudflare Pages にデプロイ（https://durian-map.pages.dev）
+- [x] `ALLOWED_ORIGINS` に本番 URL を追加して Worker を再デプロイ
+- [x] ロゴを 2.0MB → 61KB / 365KB にリサイズ（画像最適化を無効にしたため）
+- [x] 未使用依存（leaflet 系）と create-next-app 残骸の SVG を削除
+- [x] モバイル UI を `.pen` に寄せて作り直し（検索をヘッダーへ / シートはリスト専用 / 下部タブバー）
+- [x] ロゴを `.pen` からベクタ化（`designs/pen-logo-to-svg.py` → `logo.svg` / PWA アイコン）
+- [x] 営業時間・電話番号を追加（課金ティアは据え置き）
+- [x] 営業状態をカード枠線と地図ピンの枠で表現
+- [x] 距離表示と「近い順」並び替え（現在地があるときのみ）
+- [x] 刷新されたブランドマーク（断面が "D" のドリアン）を `.pen` からベクタ化
+- [x] 絞り込みチップ（営業中 / 価格帯 3 段）を実装し `priceLevel` を追加
+- [x] 「行きたい / 訪問済み」と保存画面のセグメンテッドコントロール
+- [x] カードを新デザインへ（営業中バッジ廃止 → 開店時刻・訪問済みバッジ）
 
 > 旧 ToDo にあった「バックエンド: Render (render.yaml)」は廃止。
-> バックエンドは Cloudflare Workers に移行済み。
+> サーバーはすべて Cloudflare（API = Workers、フロント = Pages）。

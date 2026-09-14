@@ -4,6 +4,14 @@ import type { Env, Lead } from './types';
 const SEARCH_TTL_SECONDS = 60 * 60 * 24; // 24 時間
 
 /**
+ * Lead のスキーマ版。**Lead にフィールドを足したら必ず上げること。**
+ * 上げないと、旧スキーマのキャッシュが TTL 切れまで新フィールド抜きで返り続ける。
+ * v2: weekdayDescriptions / phone を追加
+ * v3: priceLevel を追加
+ */
+const SCHEMA_VERSION = 'v3';
+
+/**
  * 検索条件からキャッシュキーを作る。
  *
  * 座標は 4 桁（約 11m）に丸めることで、わずかにずれた現在地でも
@@ -16,9 +24,9 @@ export function buildSearchKey(
 ): string {
     if (params.mode === 'nearby') {
         const { category, lat, lng, radius } = params;
-        return `search:nearby:${category}:${lat.toFixed(4)}:${lng.toFixed(4)}:${Math.round(radius)}`;
+        return `search:${SCHEMA_VERSION}:nearby:${category}:${lat.toFixed(4)}:${lng.toFixed(4)}:${Math.round(radius)}`;
     }
-    return `search:text:${params.category}:${params.area}`;
+    return `search:${SCHEMA_VERSION}:text:${params.category}:${params.area}`;
 }
 
 export async function readSearchCache(env: Env, key: string): Promise<Lead[] | null> {

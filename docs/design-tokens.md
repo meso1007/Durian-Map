@@ -7,7 +7,8 @@
 
 | トークン | HEX | 用途 |
 |---|---|---|
-| `--durian-green-900` | `#14532D` | ヘッダー下端・最も濃い緑、見出しテキスト |
+| `--durian-green-900` | `#14532D` | 最も濃い緑、見出しテキスト |
+| `--durian-green-800` | `#17492E` | **ヘッダー面**。ブランドマークの濃緑（Rind）と同色。`.pen` の `leaf-deep` |
 | `--durian-green-700` | `#1F6B3F` | ヘッダー背景、主ボタン（地図でみる）、アクティブタブ |
 | `--durian-green-500` | `#2E8B57` | ボタン hover、営業中ドット、リンク |
 | `--durian-lime-400` | `#A8CF3B` | ロゴ・果皮のライム、選択リング、クラスタ |
@@ -59,6 +60,46 @@
 | 水域 | `#CFEDEB` |
 | 公園・緑地 | `#D5EBB0` |
 | ラベル文字 | `#5C6B4A`（駅名・地名は表示する） |
+
+## ブランドマーク
+
+ロゴは `.pen` の `Durian Mark` フレームからベクタで起こす。ドリアンの断面が
+ワードマークの **"D" を兼ねる**ので、表示テキストは「urian Map」、
+読み上げ用に親要素へ `aria-label="Durian Map"` を当てる。
+
+| 変種 | Rind の色 | 使う場面 |
+|---|---|---|
+| Dark（`public/logo.svg`） | `#FFF7E2` | 濃緑面の上（ヘッダー） |
+| Light（`public/logo-light.svg`） | `--durian-green-800` `#17492E` | 淡色面の上 |
+
+濃緑面に載せる文字は `--color-cream` `#FFF7E2`。
+生成は `python3 designs/pen-frame-to-svg.py <file.pen> <フレーム名> <出力.svg>`。
+**`.pen` の色は `$lime` のような変数参照**なので、解決せずに書き出すと全部黒になる。
+
+iOS のアイコン / スプラッシュも同じ素材から起こす（`frontend/scripts/gen-ios-assets.mjs`）。
+
+| 用途 | 元 | 地 |
+|---|---|---|
+| アプリアイコン | `src/app/icon.svg`（App Icon フレーム。角丸は iOS が付けるので `rx` を落とす） | `#FFF9EC` |
+| スプラッシュ | Light 変種（`public/logo-light.svg`） | `--dm-surface` `#FFF7E6` |
+
+**淡色地に Dark 変種を置かないこと**（淡色マークなので見えなくなる）。
+
+## 営業状態の表現
+
+バッジだけでなく、**カードの枠線と地図ピンの枠**でも営業状態を表す。
+枠線・ピン枠は非テキスト要素なので必要なコントラストは **3:1**（`-500` 系をそのまま使ってよい）。
+**文字には使わないこと** — 文字は下の「使用ルール」に従う。
+
+| 状態 | バッジ | カード枠線 | 地図ピンの枠 |
+|---|---|---|---|
+| 営業中 (`openNow === true`) | lime-100 地 / `--dm-success-text` | `--dm-success` `#2E8B57` | `--durian-green-900` `#14532D` |
+| 準備中 (`openNow === false`) | hibiscus-100 地 / `--dm-accent-text` | `--tropic-hibiscus-500` `#E2467C` | 同左 |
+| 不明 (`undefined`) | 出さない | `--dm-border` | `#FFFFFF` |
+
+> ピンだけ濃い緑にしているのは、ピン本体が黄緑（`#8FC63C`）で `-500` の緑だと枠が埋もれるため。
+> 実装は `frontend/src/app/page.tsx` の `openStatusBorder()` と
+> `frontend/src/app/components/MapView.tsx` の `statusRingColor()`。
 
 ## 使用ルール
 

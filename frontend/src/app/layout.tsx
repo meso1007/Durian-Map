@@ -36,6 +36,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1, // iOS Safariのズーム防止
+  viewportFit: "cover", // ノッチ/ホームインジケータ領域まで描画し env(safe-area-inset-*) を有効にする
 };
 
 export default function RootLayout({

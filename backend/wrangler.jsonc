@@ -9,9 +9,13 @@
   },
   "vars": {
     "ENVIRONMENT": "production",
-    // CORS 許可オリジン（カンマ区切り）。本番フロントの URL が決まったらここに追加する。
+    // CORS 許可オリジン（カンマ区切り）。src/index.ts の判定は完全一致なので、
+    // Pages のプレビューデプロイ（https://<hash>.durian-map.pages.dev）は弾かれる。
     // 未設定時は localhost:3000 のみ許可（src/index.ts の DEV_ORIGINS）。
-    "ALLOWED_ORIGINS": "http://localhost:3000,http://127.0.0.1:3000"
+    // iOS アプリの Origin（capacitor://localhost）はここには書かない。
+    // 環境ごとに変わる値ではないので src/index.ts の NATIVE_APP_ORIGINS で常に許可する
+    // （ここに書くと、この行を編集した別ブランチのデプロイで消える）。
+    "ALLOWED_ORIGINS": "https://durian-map.pages.dev,http://localhost:3000,http://127.0.0.1:3000"
   },
   "kv_namespaces": [
     {

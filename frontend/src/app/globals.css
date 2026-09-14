@@ -7,6 +7,8 @@
 
   /* ブランド（ドリアン） */
   --durian-green-900: #14532d;
+  /* ヘッダー面。.pen の leaf-deep。ブランドマークの濃緑（Rind）と同色 */
+  --durian-green-800: #17492e;
   --durian-green-700: #1f6b3f;
   --durian-green-500: #2e8b57;
   --durian-lime-400: #a8cf3b;
@@ -53,7 +55,11 @@
 
   --color-primary: var(--dm-primary);
   --color-primary-deep: var(--durian-green-900);
+  /* ヘッダー面（bg-primary-deepest）。ブランドマークの濃緑と揃える */
+  --color-primary-deepest: var(--durian-green-800);
   --color-primary-soft: var(--durian-green-500);
+  /* 濃緑面に載せる文字（text-cream）。.pen の #FFF7E2 */
+  --color-cream: #fff7e2;
   --color-cta: var(--dm-cta);
   --color-cta-deep: var(--tropic-mango-700);
   --color-accent: var(--dm-accent);
