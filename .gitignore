@@ -18,3 +18,6 @@ frontend/.env.local
 
 # ローカル作業用のスクリーンショット（Codex セッション）
 .codex-screens/
+
+# サブエージェント用ワークツリー（Claude Code が作る）
+.claude/worktrees/
