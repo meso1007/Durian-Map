@@ -171,6 +171,7 @@ function toLead(category: string) {
         openNow: place.regularOpeningHours?.openNow,
         weekdayDescriptions: place.regularOpeningHours?.weekdayDescriptions,
         phone: place.nationalPhoneNumber,
+        priceLevel: place.priceLevel,
         photoName: place.photos?.[0]?.name,
     });
 }

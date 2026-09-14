@@ -8,6 +8,7 @@ import { useSearchParams } from 'next/navigation';
 import { ApiError, getCafePhotoUrl, searchCafes } from '@/lib/api';
 import type { Cafe, Coordinates } from '@/lib/api';
 import { loadSavedCafes, saveSavedCafes } from '@/lib/storage';
+import type { SavedCafe, SavedStatus } from '@/lib/storage';
 
 const MapView = dynamic(() => import('./components/MapView'), {
   ssr: false,
@@ -62,6 +63,30 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const getCategoryLabel = (category?: string) =>
   (category && CATEGORY_LABELS[category]) ?? null;
+
+/**
+ * 価格帯フィルタ。Places の priceLevel を 3 段にまとめる。
+ * 金額の目安はカフェ 1 人あたり。Places 側は絶対額を返さないのでこちらで言い換える。
+ */
+const PRICE_FILTERS = [
+  { id: 'cheap', label: '〜¥1,000', levels: ['PRICE_LEVEL_INEXPENSIVE', 'PRICE_LEVEL_FREE'] },
+  { id: 'mid', label: '¥1,000〜2,000', levels: ['PRICE_LEVEL_MODERATE'] },
+  { id: 'high', label: '¥2,000〜', levels: ['PRICE_LEVEL_EXPENSIVE', 'PRICE_LEVEL_VERY_EXPENSIVE'] },
+] as const;
+
+type PriceFilterId = (typeof PRICE_FILTERS)[number]['id'];
+
+/**
+ * 今日の開店時刻だけを取り出す（カードの「13:00-」）。
+ *
+ * weekdayDescriptions は「8時00分～20時00分」のような日本語表記なので、
+ * 先頭の「H時MM分」を H:MM に直す。定休日（「定休日」など時刻を含まない行）は null。
+ */
+const getOpeningTime = (weekdayDescriptions?: string[]): string | null => {
+  const line = getTodayHours(weekdayDescriptions);
+  const matched = line?.match(/(\d{1,2})時(\d{2})分/);
+  return matched ? `${matched[1]}:${matched[2]}` : null;
+};
 
 /**
  * 今日の営業時間を返す。
@@ -159,13 +184,20 @@ function CafeFinderContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<Cafe[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
-  const [savedCafes, setSavedCafes] = useState<Cafe[]>([]);
+  const [savedCafes, setSavedCafes] = useState<SavedCafe[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectionSource, setSelectionSource] = useState<'map' | 'list' | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // 近い順の並び替え。現在地が取れているときだけ意味を持つ。
   const [sortByDistance, setSortByDistance] = useState(false);
+
+  // 検索結果の絞り込み（.pen のフィルタチップ）。押した分だけ実際に効かせる。
+  const [openNowOnly, setOpenNowOnly] = useState(false);
+  const [priceFilters, setPriceFilters] = useState<PriceFilterId[]>([]);
+
+  // 保存タブのセグメント（すべて / 行きたい / 訪問済み）
+  const [savedFilter, setSavedFilter] = useState<'all' | SavedStatus>('all');
 
   // モバイル用ボトムシートの状態
   const [sheetState, setSheetState] = useState<'half' | 'full'>('half');
@@ -348,18 +380,23 @@ function CafeFinderContent() {
     search({ area });
   };
 
-  const handleQuickArea = (value: string) => {
-    setArea(value);
-    search({ area: value });
+  const persistSaved = (next: SavedCafe[]) => {
+    setSavedCafes(next);
+    void saveSavedCafes(next);
   };
 
   const toggleSave = (cafe: Cafe) => {
     const isAlreadySaved = savedCafes.some(c => c.id === cafe.id);
-    const newSaved = isAlreadySaved
-      ? savedCafes.filter(c => c.id !== cafe.id)
-      : [...savedCafes, cafe];
-    setSavedCafes(newSaved);
-    void saveSavedCafes(newSaved);
+    persistSaved(
+      isAlreadySaved
+        ? savedCafes.filter(c => c.id !== cafe.id)
+        // 保存した直後は「行きたい」。訪問済みは詳細画面で切り替える。
+        : [...savedCafes, { ...cafe, status: 'want', savedAt: new Date().toISOString() }],
+    );
+  };
+
+  const setSavedStatus = (cafeId: string, status: SavedStatus) => {
+    persistSaved(savedCafes.map(c => (c.id === cafeId ? { ...c, status } : c)));
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -372,7 +409,24 @@ function CafeFinderContent() {
     else if (dy > 50) setSheetState('half'); // 下にスワイプ
   };
 
-  const baseCafes = activeTab === 'search' ? results : savedCafes;
+  const matchesPrice = (cafe: Cafe) => {
+    if (priceFilters.length === 0) return true;
+    // priceLevel が取れない店を隠すと結果がごっそり消えるので、絞り込みの対象外にする。
+    if (!cafe.priceLevel) return false;
+    return priceFilters.some((id) =>
+      PRICE_FILTERS.find((f) => f.id === id)?.levels.some((l) => l === cafe.priceLevel),
+    );
+  };
+
+  const filteredResults = results.filter(
+    (cafe) => (!openNowOnly || cafe.openNow === true) && matchesPrice(cafe),
+  );
+
+  const filteredSaved = savedCafes.filter(
+    (cafe) => savedFilter === 'all' || cafe.status === savedFilter,
+  );
+
+  const baseCafes: Cafe[] = activeTab === 'search' ? filteredResults : filteredSaved;
 
   // 現在地が無ければ距離が出せないので、並び替えも成立しない。
   const canSortByDistance = currentLocation !== null;
@@ -391,14 +445,15 @@ function CafeFinderContent() {
 
   // 定番エリアのオートコンプリート用リスト
   const popularAreas = ['渋谷', '新宿', '池袋', '東京', '銀座', '横浜', '鎌倉', '大阪', '京都', '福岡', '札幌', '名古屋'];
-  const quickAreas = popularAreas.slice(0, 4);
 
-  const listHeading =
-    activeTab === 'saved'
-      ? '保存したカフェ'
-      : searchMode === 'nearby'
-        ? 'この辺りのカフェ'
-        : 'この辺りのカフェ';
+  const listHeading = activeTab === 'saved' ? '保存したカフェ' : 'この辺りのカフェ';
+  const activeFilterCount = (openNowOnly ? 1 : 0) + priceFilters.length;
+
+  const savedCounts = {
+    all: savedCafes.length,
+    want: savedCafes.filter(c => c.status === 'want').length,
+    visited: savedCafes.filter(c => c.status === 'visited').length,
+  };
 
   // 検索が済んだらヘッダーを畳んで、地図とリストに高さを返す。
   const isHeaderCompact = activeTab === 'saved' || hasSearched;
@@ -424,14 +479,15 @@ function CafeFinderContent() {
         以前はボトムシートの中にあり、結果カードが 1 枚も見えなかった。
         検索が済んだら CTA とチップを畳み、地図とリストに高さを返す。
       */}
-      <header className="shrink-0 z-40 bg-primary rounded-b-[24px] px-4 pb-3 pt-3 md:px-6">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface overflow-hidden">
-            <Image src="/logo.svg" alt="" width={44} height={44} priority className="h-9 w-9" />
-          </span>
-          <span className="min-w-0">
-            <span className="block font-display text-xl md:text-2xl font-bold text-white leading-tight">Durian Map</span>
-            <span className="block text-xs text-surface/90 leading-tight mt-0.5">チェーンじゃない、あの一杯へ。</span>
+      <header className="shrink-0 z-40 bg-primary-deepest rounded-b-[24px] px-4 pb-3 pt-3 md:px-6">
+        {/*
+          ブランドロックアップ。マークがワードマークの "D" を兼ねるので、
+          表示テキストは "urian Map"、読み上げは aria-label で "Durian Map" にする。
+        */}
+        <div className="flex items-center gap-1" aria-label="Durian Map" role="img">
+          <Image src="/logo.svg" alt="" width={56} height={56} priority className="h-12 w-12 shrink-0" />
+          <span aria-hidden className="font-display text-2xl md:text-3xl font-bold text-cream leading-none -ml-1">
+            urian Map
           </span>
         </div>
 
@@ -443,11 +499,8 @@ function CafeFinderContent() {
             className="mt-3 w-full min-h-[56px] flex items-center gap-3 px-4 py-3 rounded-xl bg-cta text-text text-left transition-opacity disabled:opacity-50"
           >
             <span className="shrink-0">{isLocating ? <LoadingSpinner /> : <TargetIcon />}</span>
-            <span className="flex-1 min-w-0">
-              <span className="block text-base font-bold leading-tight">
-                {isLocating ? '現在地を取得中...' : '現在地の周辺で探す'}
-              </span>
-              <span className="block text-xs leading-tight mt-0.5 opacity-80">GPSでいますぐ見つける</span>
+            <span className="flex-1 min-w-0 text-base font-bold leading-tight">
+              {isLocating ? '現在地を取得中...' : '近くからさがす'}
             </span>
             <ChevronRightIcon />
           </button>
@@ -459,7 +512,7 @@ function CafeFinderContent() {
               type="button"
               onClick={handleLocate}
               disabled={isLocating}
-              aria-label="現在地の周辺で探す"
+              aria-label="近くからさがす"
               className="h-12 w-12 shrink-0 flex items-center justify-center rounded-xl bg-cta text-text transition-opacity disabled:opacity-50"
             >
               {isLocating ? <LoadingSpinner /> : <TargetIcon />}
@@ -471,7 +524,7 @@ function CafeFinderContent() {
             onChange={(e) => setArea(e.target.value)}
             list="popular-areas"
             aria-label="検索したいエリア名"
-            placeholder="エリア名を入力（例：中目黒）"
+            placeholder="エリア名からさがす"
             className="flex-1 min-w-0 h-12 px-4 rounded-xl bg-surface text-base text-text placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-lime"
           />
           <datalist id="popular-areas">
@@ -487,21 +540,6 @@ function CafeFinderContent() {
           </button>
         </form>
 
-        {/* 押せるチップ = 実際にそのエリアを検索する（docs/design.md 1節） */}
-        {!isHeaderCompact && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {quickAreas.map(a => (
-              <button
-                key={a}
-                type="button"
-                onClick={() => handleQuickArea(a)}
-                className="min-h-11 px-4 rounded-full border border-white/25 bg-white/10 text-sm font-medium text-surface"
-              >
-                {a}
-              </button>
-            ))}
-          </div>
-        )}
       </header>
 
       {/* 地図 + ボトムシート。PC では 2 カラムに開く。 */}
@@ -555,14 +593,11 @@ function CafeFinderContent() {
           <div className="flex-1 flex flex-col overflow-hidden px-4 md:px-5">
             {/* シート見出し（.pen の Sheet Head）。中身が無いうちは出さない。 */}
             <div className={`shrink-0 flex items-center justify-between gap-2 py-2 md:pt-4 ${activeTab === 'search' && !hasSearched ? 'hidden' : ''}`}>
-              <div className="flex items-center gap-2 min-w-0">
+              {activeTab === 'saved' ? (
+                <SavedSegments value={savedFilter} onChange={setSavedFilter} counts={savedCounts} />
+              ) : (
                 <h2 className="text-[17px] font-bold leading-[1.4] text-text truncate">{listHeading}</h2>
-                {currentCafes.length > 0 && (
-                  <span className="num shrink-0 rounded-full bg-success-soft px-2 py-0.5 text-xs font-bold text-success-text">
-                    {currentCafes.length}件
-                  </span>
-                )}
-              </div>
+              )}
 
               {/* 並び替えは実際に効くときだけ出す（docs/design.md 1節） */}
               {canSortByDistance && currentCafes.length > 1 && (
@@ -578,14 +613,41 @@ function CafeFinderContent() {
               )}
             </div>
 
+            {/*
+              絞り込みチップ（.pen の Filters）。押した分だけ実際に効かせる。
+              折り返すと 2 行になってリストの高さを食うので、横スクロールの 1 行にする。
+            */}
+            {activeTab === 'search' && hasSearched && results.length > 0 && (
+              <div className="shrink-0 flex gap-1.5 pb-2 overflow-x-auto -mx-4 px-4 md:-mx-5 md:px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <FilterChip active={openNowOnly} onClick={() => setOpenNowOnly(v => !v)}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${openNowOnly ? 'bg-white' : 'bg-success'}`} />
+                  営業中
+                </FilterChip>
+                {PRICE_FILTERS.map(({ id, label }) => (
+                  <FilterChip
+                    key={id}
+                    active={priceFilters.includes(id)}
+                    onClick={() =>
+                      setPriceFilters(prev =>
+                        prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id],
+                      )
+                    }
+                  >
+                    {label}
+                  </FilterChip>
+                ))}
+              </div>
+            )}
+
             {selectedCafe && (
               <div className={`shrink-0 pb-3 ${selectionSource === 'map' ? 'hidden md:block' : 'block'}`}>
                 <SelectedCafePanel
                   cafe={selectedCafe}
                   area={area}
                   distance={getDistanceMeters(currentLocation, selectedCafe)}
-                  isSaved={savedCafes.some((cafe) => cafe.id === selectedCafe.id)}
+                  savedStatus={savedCafes.find((cafe) => cafe.id === selectedCafe.id)?.status}
                   onToggleSave={() => toggleSave(selectedCafe)}
+                  onSetStatus={(next) => setSavedStatus(selectedCafe.id, next)}
                   onClose={clearSelectedCafe}
                 />
               </div>
@@ -608,6 +670,7 @@ function CafeFinderContent() {
                   cafe={cafe}
                   distance={getDistanceMeters(currentLocation, cafe)}
                   isSelected={cafe.id === selectedId}
+                  savedStatus={savedCafes.find(c => c.id === cafe.id)?.status}
                   onSelect={() => handleCardSelect(cafe.id)}
                 />
               ))}
@@ -616,17 +679,25 @@ function CafeFinderContent() {
                 <EmptyState
                   title={
                     activeTab === 'saved'
-                      ? 'まだ保存したカフェはありません'
-                      : hasSearched
-                        ? '見つかりませんでした'
-                        : 'まずはエリアを決めましょう'
+                      ? savedFilter === 'all'
+                        ? 'まだ保存したカフェはありません'
+                        : savedFilter === 'want'
+                          ? '「行きたい」はまだありません'
+                          : '「訪問済み」はまだありません'
+                      : !hasSearched
+                        ? 'まずはエリアを決めましょう'
+                        : activeFilterCount > 0
+                          ? '条件に合うカフェがありません'
+                          : '見つかりませんでした'
                   }
                   description={
                     activeTab === 'saved'
                       ? '気になるカフェを選んで「保存」すると、ここに並びます。'
-                      : hasSearched
-                        ? '別のエリア名でお試しください。'
-                        : '現在地の周辺で探すか、エリア名を入力してください。'
+                      : !hasSearched
+                        ? '現在地の周辺で探すか、エリア名を入力してください。'
+                        : activeFilterCount > 0
+                          ? '絞り込みを外すと、ほかのカフェが表示されます。'
+                          : '別のエリア名でお試しください。'
                   }
                 />
               )}
@@ -676,12 +747,15 @@ type CafeCardProps = {
   cafe: Cafe;
   distance: number | null;
   isSelected: boolean;
+  /** 保存済みなら状態。未保存なら undefined。 */
+  savedStatus?: SavedStatus;
   onSelect: () => void;
 };
 
 // カード全体がタップ領域。カード内に別のボタンは置かない（docs/design.md 5節）
-function CafeCard({ cafe, distance, isSelected, onSelect }: CafeCardProps) {
+function CafeCard({ cafe, distance, isSelected, savedStatus, onSelect }: CafeCardProps) {
   const photoUrl = getCafePhotoUrl(cafe);
+  const openingTime = getOpeningTime(cafe.weekdayDescriptions);
 
   return (
     <button
@@ -701,12 +775,13 @@ function CafeCard({ cafe, distance, isSelected, onSelect }: CafeCardProps) {
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-start gap-2">
-          <h3 className="flex-1 min-w-0 text-base font-bold leading-[1.4] text-text line-clamp-2">{cafe.name}</h3>
-          <OpenStatusBadge openNow={cafe.openNow} />
-        </div>
+        <h3 className="text-base font-bold leading-[1.4] text-text line-clamp-2">{cafe.name}</h3>
 
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 text-xs text-text-muted">
+        {/*
+          Meta 行（.pen の Cafe Card）: ★ 4.6 (128) · 320m · 🕐 13:00-
+          営業中バッジは新デザインで廃止された。営業状態はカードの枠線と地図ピンの枠が担う。
+        */}
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 mt-1.5 text-xs text-text-muted">
           {cafe.rating != null && (
             <span className="inline-flex items-center gap-1">
               <StarIcon className="w-3.5 h-3.5 text-star" />
@@ -718,27 +793,53 @@ function CafeCard({ cafe, distance, isSelected, onSelect }: CafeCardProps) {
           )}
           {distance != null && (
             <>
-              {cafe.rating != null && <span aria-hidden>・</span>}
+              {cafe.rating != null && <span aria-hidden>·</span>}
               <span className="num">{formatDistance(distance)}</span>
+            </>
+          )}
+          {openingTime && (
+            <>
+              <span aria-hidden>·</span>
+              <span className="inline-flex items-center gap-1">
+                <ClockIcon className="w-3 h-3" />
+                <span className="num">{openingTime}-</span>
+              </span>
             </>
           )}
         </div>
 
-        <p className="text-xs leading-[1.5] text-text-muted mt-1 line-clamp-1">{cafe.address}</p>
+        {/* 訪問済みバッジは住所と同じ行に置く。住所を消してしまうと店を特定しにくくなる。 */}
+        <p className="flex items-center gap-1.5 text-xs leading-[1.5] text-text-muted mt-1">
+          {savedStatus === 'visited' && (
+            <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-success-soft px-2 py-0.5 text-[10px] font-bold leading-none text-success-text">
+              <CheckIcon />
+              訪問済み
+            </span>
+          )}
+          <span className="min-w-0 truncate">{cafe.address}</span>
+        </p>
       </div>
     </button>
   );
 }
 
-// 状態バッジ: 枠線・影・ホバーなし（docs/design.md 5節）
-function OpenStatusBadge({ openNow }: { openNow?: boolean }) {
+/**
+ * 状態バッジ: 枠線・影・ホバーなし（docs/design.md 5節）。
+ *
+ * `plain` は .pen の詳細画面に合わせた地色なしの形。
+ * 地図に重なるカードでは背景が読めないので、そちらは淡色地のピルのままにする。
+ */
+function OpenStatusBadge({ openNow, plain = false }: { openNow?: boolean; plain?: boolean }) {
   if (openNow === undefined) {
     return null;
   }
 
+  const tone = openNow ? 'text-success-text' : 'text-accent-text';
+  const surface = plain ? '' : openNow ? 'bg-success-soft px-2 py-1' : 'bg-accent-soft px-2 py-1';
+
   return (
     <span
-      className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium leading-none ${openNow ? 'bg-success-soft text-success-text' : 'bg-accent-soft text-accent-text'}`}
+      className={`shrink-0 inline-flex items-center gap-1 rounded-full text-[11px] font-bold leading-none ${tone} ${surface}`}
     >
       <span className={`h-1.5 w-1.5 rounded-full ${openNow ? 'bg-success' : 'bg-accent'}`} />
       {openNow ? '営業中' : '準備中'}
@@ -758,14 +859,17 @@ function RatingStars({ rating }: { rating: number }) {
   );
 }
 
-function SelectedCafePanel({ cafe, area, distance, isSaved, onToggleSave, onClose }: {
+function SelectedCafePanel({ cafe, area, distance, savedStatus, onToggleSave, onSetStatus, onClose }: {
   cafe: Cafe;
   area: string;
   distance: number | null;
-  isSaved: boolean;
+  /** 保存済みなら状態。未保存なら undefined。 */
+  savedStatus?: SavedStatus;
   onToggleSave: () => void;
+  onSetStatus: (next: SavedStatus) => void;
   onClose: () => void;
 }) {
+  const isSaved = savedStatus !== undefined;
   const mapUrl = getCafeMapUrl(cafe);
   const domain = getCafeDomain(cafe);
   const photoUrl = getCafePhotoUrl(cafe);
@@ -802,7 +906,7 @@ function SelectedCafePanel({ cafe, area, distance, isSaved, onToggleSave, onClos
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-2">
               <h2 className="flex-1 min-w-0 text-lg font-bold leading-[1.4] text-text">{cafe.name}</h2>
-              <OpenStatusBadge openNow={cafe.openNow} />
+              <OpenStatusBadge openNow={cafe.openNow} plain />
             </div>
             {(categoryLabel || distance != null) && (
               <p className="mt-1 text-sm leading-[1.6] text-text-muted">
@@ -854,6 +958,7 @@ function SelectedCafePanel({ cafe, area, distance, isSaved, onToggleSave, onClos
             <BookmarkIcon filled={isSaved} className="w-5 h-5" />
             {isSaved ? '保存済み' : '保存'}
           </button>
+
           <button
             type="button"
             onClick={handleShare}
@@ -863,6 +968,31 @@ function SelectedCafePanel({ cafe, area, distance, isSaved, onToggleSave, onClos
             シェア
           </button>
         </div>
+
+        {/*
+          「行きたい / 訪問済み」。保存していないカフェに状態は無いので、保存後だけ出す。
+          押せるのに効かない UI を作らないため（docs/design.md 1節）。
+        */}
+        {isSaved && (
+          <div className="mt-3 flex gap-2" role="group" aria-label="保存した状態">
+            {([
+              { id: 'want', label: '行きたい' },
+              { id: 'visited', label: '訪問済み' },
+            ] as const).map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onSetStatus(id)}
+                aria-pressed={savedStatus === id}
+                className={`flex-1 min-h-11 rounded-xl border text-xs font-bold ${savedStatus === id
+                  ? 'border-primary bg-primary text-white'
+                  : 'border-border bg-surface text-text-muted'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* 情報行（.pen の Info）。値が取れないフィールドは行ごと出さない。 */}
         <div className="mt-4 divide-y divide-border border-t border-border">
@@ -933,9 +1063,9 @@ function InfoRow({ icon, label, href, children }: {
   );
 }
 
-function ClockIcon() {
+function ClockIcon({ className = 'w-[17px] h-[17px]' }: { className?: string }) {
   return (
-    <svg className="w-[17px] h-[17px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
       <circle cx="12" cy="12" r="9" strokeWidth={2} />
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3.5 2" />
     </svg>
@@ -1026,6 +1156,64 @@ function TabButton({ active, onClick, icon, label, badge }: {
       </span>
       <span className={`text-[10px] leading-none ${active ? 'font-bold' : 'font-medium'}`}>{label}</span>
     </button>
+  );
+}
+
+/** 検索結果の絞り込みチップ（.pen の Filters）。押したら実際に絞り込む。 */
+function FilterChip({ active, onClick, children }: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium ${active
+        ? 'border-primary bg-primary text-white'
+        : 'border-border bg-surface-sunken text-text-muted'}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** 保存タブのセグメンテッドコントロール（.pen の Filter Segmented）。 */
+function SavedSegments({ value, onChange, counts }: {
+  value: 'all' | SavedStatus;
+  onChange: (next: 'all' | SavedStatus) => void;
+  counts: { all: number; want: number; visited: number };
+}) {
+  const segments = [
+    { id: 'all', label: 'すべて', count: counts.all },
+    { id: 'want', label: '行きたい', count: counts.want },
+    { id: 'visited', label: '訪問済み', count: counts.visited },
+  ] as const;
+
+  return (
+    <div className="flex min-w-0 overflow-hidden rounded-full border border-border bg-surface divide-x divide-border">
+      {segments.map(({ id, label, count }) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => onChange(id)}
+          aria-pressed={value === id}
+          className={`px-3 py-1.5 text-xs font-bold whitespace-nowrap ${value === id ? 'bg-primary text-white' : 'text-text-muted'}`}
+        >
+          {label}
+          <span className="num ml-1 font-normal opacity-80">{count}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+    </svg>
   );
 }
 

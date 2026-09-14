@@ -26,6 +26,8 @@ export type Place = {
         weekdayDescriptions?: string[];
     };
     nationalPhoneNumber?: string;
+    /** PRICE_LEVEL_INEXPENSIVE 〜 PRICE_LEVEL_VERY_EXPENSIVE。取得できない店も多い。 */
+    priceLevel?: string;
     photos?: Array<{ name: string }>;
 };
 
@@ -45,6 +47,8 @@ export type Lead = {
     weekdayDescriptions?: string[];
     /** 国内向け表記の電話番号。 */
     phone?: string;
+    /** 価格帯。フロントの価格フィルタが使う。取得できないときは undefined。 */
+    priceLevel?: string;
     /** Places の写真リソース名。表示は /api/photo 経由で行う（API キーを露出させないため）。 */
     photoName?: string;
 };
