@@ -5,7 +5,9 @@
   "compatibility_date": "2025-09-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
-    "enabled": true
+    "enabled": true,
+    // 全件はログ枠を食うだけなので 2 割だけ残す。エラーは console.error で必ず出す。
+    "head_sampling_rate": 0.2
   },
   "vars": {
     "ENVIRONMENT": "production",
@@ -15,14 +17,36 @@
     // iOS アプリの Origin（capacitor://localhost）はここには書かない。
     // 環境ごとに変わる値ではないので src/index.ts の NATIVE_APP_ORIGINS で常に許可する
     // （ここに書くと、この行を編集した別ブランチのデプロイで消える）。
-    "ALLOWED_ORIGINS": "https://durian-map.pages.dev,http://localhost:3000,http://127.0.0.1:3000"
+    "ALLOWED_ORIGINS": "https://durian-map.pages.dev,http://localhost:3000,http://127.0.0.1:3000",
+
+    // 1 日に Places へ投げてよい上限（JST 日付で数える）。超えると 503 を返す。
+    // レート制限は 1 クライアントあたりの制限なので、想定外の請求はこちらで止める。
+    // 検索 300 回 ≒ $10.5/日、写真 3,000 枚 ≒ $21/日 が理論上の最大。
+    "DAILY_SEARCH_BUDGET": 300,
+    "DAILY_PHOTO_BUDGET": 3000
   },
   "kv_namespaces": [
     {
-      // 検索結果キャッシュ + レート制限カウンタ
+      // 検索結果キャッシュ / 写真バイナリ / 逆ジオコード / 予算カウンタ
       "binding": "CACHE",
       "id": "53d639907024463b8b32cbd591ca430c"
     }
+  ],
+  "ratelimits": [
+    {
+      // 検索系（/api/search、/api/reverse-geocode、/health）
+      "name": "SEARCH_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 30, "period": 60 }
+    },
+    {
+      // 写真は 1 検索で 15〜20 枚並ぶので検索より緩くする。
+      "name": "PHOTO_RATE_LIMITER",
+      "namespace_id": "1002",
+      "simple": { "limit": 300, "period": 60 }
+    }
   ]
-  // GOOGLE_API_KEY は secret。`wrangler secret put GOOGLE_API_KEY` で設定する（ここには書かない）。
+  // secret（ここには書かない。`wrangler secret put <名前>` で設定する）:
+  //   GOOGLE_API_KEY    … Places API (New) のキー
+  //   PHOTO_SIGNING_KEY … /api/photo の署名鍵
 }

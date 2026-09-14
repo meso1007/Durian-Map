@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { buildSearchKey, readSearchCache, writeSearchCache } from './cache';
 import { chainListSize, isChainCafe } from './chains';
 import { PlacesApiError, fetchPhoto, searchPlaces } from './places';
-import { checkRateLimit } from './ratelimit';
+import { rateLimitKey } from './ratelimit';
 import type { Env, Lead, Place, SearchResponse } from './types';
 
 const DEFAULT_NEARBY_RADIUS_METERS = 1500;
@@ -39,27 +39,36 @@ app.use(
             const allowed = [...configuredOrDev, ...NATIVE_APP_ORIGINS];
             return allowed.includes(origin) ? origin : null;
         },
-        allowMethods: ['GET', 'OPTIONS'],
+        allowMethods: ['GET', 'HEAD', 'OPTIONS'],
         maxAge: 86400,
     }),
 );
 
 // --- レート制限 ---------------------------------------------------------
 
-app.use('/api/*', async (c, next) => {
-    const clientId = c.req.header('cf-connecting-ip') ?? 'unknown';
-    const result = await checkRateLimit(c.env, clientId);
+/**
+ * Rate Limiting binding で制限する。/health も検索側に入れる（無料の疎通確認を
+ * 無制限に叩かれないように）。写真は 1 検索で 15〜20 枚並ぶので別枠。
+ */
+app.use('*', async (c, next) => {
+    const limiter =
+        c.req.path === '/api/photo' ? c.env.PHOTO_RATE_LIMITER : c.env.SEARCH_RATE_LIMITER;
+    const key = rateLimitKey(c.req.raw.headers);
 
-    if (!result.allowed) {
+    // binding 未設定（ローカル実行）やヘッダ欠落時は素通しする。
+    // ここで固定キーに寄せると、全員が 1 つのバケツを共有してしまう。
+    if (!limiter || !key) return next();
+
+    const { success } = await limiter.limit({ key });
+    if (!success) {
         return c.json(
             { error: 'リクエストが多すぎます。しばらく経ってから再度お試しください。' },
             429,
-            { 'Retry-After': String(result.retryAfterSeconds) },
+            { 'Retry-After': '60' },
         );
     }
 
-    c.header('X-RateLimit-Remaining', String(result.remaining));
-    await next();
+    return next();
 });
 
 // --- ヘルスチェック -----------------------------------------------------

@@ -2,6 +2,10 @@
 export type Env = {
     /** 検索結果キャッシュ用の KV。wrangler.jsonc の kv_namespaces で定義。 */
     CACHE: KVNamespace;
+    /** 検索系のレート制限（60 秒 30 回）。wrangler.jsonc の ratelimits で定義。 */
+    SEARCH_RATE_LIMITER: RateLimit;
+    /** 写真のレート制限（60 秒 300 回）。1 検索で 15〜20 枚並ぶので検索より緩い。 */
+    PHOTO_RATE_LIMITER: RateLimit;
     /** Google Places API (New) のキー。`wrangler secret put GOOGLE_API_KEY` で設定。 */
     GOOGLE_API_KEY: string;
     /** CORS を許可するオリジン（カンマ区切り）。未設定なら開発用 localhost のみ許可。 */
