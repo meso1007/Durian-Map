@@ -19,6 +19,11 @@ const lateNight: OpeningPeriod[] = [
     { open: { day: 5, hour: 22, minute: 0 }, close: { day: 6, hour: 2, minute: 0 } },
 ];
 
+/** 土曜 23:00〜日曜 3:00。close の day が open より小さくなる（週を跨ぐ）。 */
+const weekWrap: OpeningPeriod[] = [
+    { open: { day: 6, hour: 23, minute: 0 }, close: { day: 0, hour: 3, minute: 0 } },
+];
+
 /** 24 時間営業（close なし）。 */
 const alwaysOpen: OpeningPeriod[] = [{ open: { day: 0, hour: 0, minute: 0 } }];
 
@@ -72,6 +77,34 @@ describe('computeOpeningStatus', () => {
         });
     });
 
+    /**
+     * 土曜→日曜は週の折り返しをまたぐので close の分数が open より小さくなる。
+     * 金曜→土曜のケースでは通らない分岐なので別に固定しておく。
+     */
+    describe('週跨ぎ（土曜 → 日曜）', () => {
+        // 2026-09-19 は土曜、2026-09-20 は日曜。
+        it('土曜の深夜は営業中', () => {
+            expect(computeOpeningStatus(weekWrap, jst('2026-09-19', '23:30:00'))).toEqual({
+                openNow: true,
+                closesAt: '3:00',
+            });
+        });
+
+        it('週が変わった日曜の未明も営業中', () => {
+            expect(computeOpeningStatus(weekWrap, jst('2026-09-20', '02:00:00'))).toEqual({
+                openNow: true,
+                closesAt: '3:00',
+            });
+        });
+
+        it('閉店後は次の土曜が opensAt', () => {
+            expect(computeOpeningStatus(weekWrap, jst('2026-09-20', '04:00:00'))).toEqual({
+                openNow: false,
+                opensAt: '23:00',
+            });
+        });
+    });
+
     it('24 時間営業は常に営業中で closesAt を持たない', () => {
         expect(computeOpeningStatus(alwaysOpen, jst('2026-09-15', '03:00:00'))).toEqual({
             openNow: true,
@@ -81,6 +114,14 @@ describe('computeOpeningStatus', () => {
     it('periods が無ければすべて undefined（「閉店」ではなく「不明」）', () => {
         expect(computeOpeningStatus(undefined, jst('2026-09-15', '14:00:00'))).toEqual({});
         expect(computeOpeningStatus([], jst('2026-09-15', '14:00:00'))).toEqual({});
+    });
+
+    it('値域外の period は無視する（24 時間営業として扱わない）', () => {
+        const broken: OpeningPeriod[] = [
+            { open: { day: 7, hour: 8, minute: 0 }, close: { day: 7, hour: 21, minute: 0 } },
+            { open: { day: 2, hour: 8, minute: 0 }, close: { day: 2, hour: 99, minute: 0 } },
+        ];
+        expect(computeOpeningStatus(broken, jst('2026-09-15', '14:00:00'))).toEqual({});
     });
 
     it('JST 固定で判定する（実行環境のタイムゾーンに依存しない）', () => {

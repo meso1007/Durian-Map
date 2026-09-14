@@ -86,8 +86,27 @@ describe('snapPhotoSize', () => {
 });
 
 describe('buildPhotoCacheKey', () => {
-    it('サイズごとに別キーになる', () => {
-        expect(buildPhotoCacheKey(NAME, 400, 400)).toBe(`photo:v1:${NAME}:400x400`);
-        expect(buildPhotoCacheKey(NAME, 400, 400)).not.toBe(buildPhotoCacheKey(NAME, 800, 800));
+    it('サイズごとに別キーになる', async () => {
+        expect(await buildPhotoCacheKey(NAME, 400, 400)).toMatch(/^photo:v1:[0-9a-f]{64}:400x400$/);
+        expect(await buildPhotoCacheKey(NAME, 400, 400)).not.toBe(
+            await buildPhotoCacheKey(NAME, 800, 800),
+        );
+    });
+
+    it('写真ごとに別キーになる', async () => {
+        expect(await buildPhotoCacheKey(NAME, 400, 400)).not.toBe(
+            await buildPhotoCacheKey(`${NAME}x`, 400, 400),
+        );
+    });
+
+    /**
+     * 実際の写真リソース名は 457〜494 文字ある。生の名前を連結すると KV のキー上限
+     * 512 バイトに 1 バイトしか余裕がなく、少し長いだけで写真キャッシュが静かに死ぬ。
+     */
+    it('写真名がどれだけ長くてもキー長は一定で KV の上限に収まる', async () => {
+        const long = `places/${'a'.repeat(400)}/photos/${'b'.repeat(400)}`;
+        const key = await buildPhotoCacheKey(long, 800, 800);
+        expect(key.length).toBe((await buildPhotoCacheKey(NAME, 800, 800)).length);
+        expect(new TextEncoder().encode(key).length).toBeLessThan(512);
     });
 });

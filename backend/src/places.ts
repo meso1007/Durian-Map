@@ -73,6 +73,11 @@ export async function callPlacesApi(
         );
     }
 
+    // redirect: 'manual' を頼んだ呼び出し側にとって 3xx は想定内の結果。
+    if (init.redirect === 'manual' && response.status >= 300 && response.status < 400) {
+        return response;
+    }
+
     if (!response.ok) {
         const detail = await response.text().catch(() => '');
         console.error('places_api_error', {
@@ -163,6 +168,10 @@ export async function searchPlaces(env: Env, args: SearchArgs): Promise<Place[]>
  *
  * キーは**ヘッダ**で送る。クエリに載せると上流のアクセスログや中間のキャッシュに
  * キーごと残る。
+ *
+ * この API は実体（lh3.googleusercontent.com など）へ 302 で飛ばす。
+ * `redirect: 'follow'` にするとカスタムヘッダはリダイレクト先にも送られるので、
+ * **キーを載せたまま別ホストへ行かないよう** リダイレクトは自分で辿る。
  */
 export async function fetchPhoto(
     env: Env,
@@ -174,12 +183,23 @@ export async function fetchPhoto(
     url.searchParams.set('maxWidthPx', String(maxWidthPx));
     url.searchParams.set('maxHeightPx', String(maxHeightPx));
 
-    return callPlacesApi(
+    const response = await callPlacesApi(
         url,
         {
-            redirect: 'follow',
+            redirect: 'manual',
             headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY },
         },
         'Places photo',
     );
+
+    if (response.status < 300 || response.status >= 400) return response;
+
+    const location = response.headers.get('Location');
+    // https 以外へは追わない（リダイレクト先を使った内部宛先へのアクセスを防ぐ）。
+    if (!location || !location.startsWith('https://')) {
+        throw new PlacesApiError('Places photo returned an unusable redirect', 502);
+    }
+
+    // 2 度目はキーを付けない。実体は署名付き URL なので認証は要らない。
+    return callPlacesApi(location, { redirect: 'follow' }, 'Places photo redirect');
 }

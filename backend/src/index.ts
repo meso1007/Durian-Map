@@ -62,14 +62,24 @@ const app = new Hono<AppEnv>();
 /**
  * レスポンスを待たせずに後処理を走らせる。
  *
- * `c.executionCtx` はテスト実行時など ExecutionContext が無い環境では throw するので、
- * その場合はそのまま走らせる（await しないのは同じ）。
+ * 失敗はここで必ず握ってログに出す。誰も await しない Promise なので、
+ * reject を放置すると**キャッシュ書き込みの失敗に気づけない**（unhandled rejection
+ * にもなる）。`c.executionCtx` は ExecutionContext が無い環境では throw するので、
+ * その場合はそのまま走らせる。
  */
-function runAfterResponse(c: AppContext, promise: Promise<unknown>): void {
+function runAfterResponse(c: AppContext, label: string, promise: Promise<unknown>): void {
+    const guarded = promise.catch((error: unknown) => {
+        console.error('after_response_failed', {
+            label,
+            requestId: c.get('requestId'),
+            error: String(error),
+        });
+    });
+
     try {
-        c.executionCtx.waitUntil(promise);
+        c.executionCtx.waitUntil(guarded);
     } catch {
-        void promise;
+        void guarded;
     }
 }
 
@@ -268,10 +278,10 @@ app.get('/api/search', async (c) => {
         const places = await searchPlaces(c.env, searchArgs);
         const cafes = places.filter(keepIndependentCafe).map(toCachedCafe(category));
 
-        runAfterResponse(c, incrementBudget(c.env.CACHE, 'search'));
+        runAfterResponse(c, 'budget_search', incrementBudget(c.env.CACHE, 'search'));
 
         // キャッシュ書き込みはレスポンスを待たせない。
-        runAfterResponse(c, writeSearchCache(c.env, cacheKey, cafes));
+        runAfterResponse(c, 'search_cache_write', writeSearchCache(c.env, cacheKey, cafes));
 
         console.log('search_completed', {
             requestId: c.get('requestId'),
@@ -366,16 +376,28 @@ app.get('/api/reverse-geocode', async (c) => {
 
 const photoQuerySchema = z.object({
     // 例: places/ChIJxxxx/photos/yyyy。ここが SSRF に対する唯一の防御線。
-    name: z.string().regex(PHOTO_NAME_PATTERN, 'name の形式が不正です'),
+    // 長さも制限する。name はハッシュ化せず KV のキーに使うので、
+    // 上限が無いとキー 512B を超えて写真キャッシュが静かに効かなくなる。
+    // 実際の写真リソース名は 500 文字近くある。上限は暴走入力を弾くためのもので、
+    // KV キーの長さは buildPhotoCacheKey のハッシュ化で担保している。
+    name: z
+        .string()
+        .max(512, 'name が長すぎます')
+        .regex(PHOTO_NAME_PATTERN, 'name の形式が不正です'),
     // 検索レスポンスで配った photoSig。これが無いと任意の写真を取れてしまう。
-    sig: z.string().min(1, 'sig は必須です'),
-    maxWidthPx: z.coerce.number().int().positive().optional(),
-    maxHeightPx: z.coerce.number().int().positive().optional(),
+    sig: z.string().regex(/^[0-9a-f]{64}$/i, 'sig の形式が不正です'),
+    maxWidthPx: z.preprocess(emptyToUndefined, z.coerce.number().int().positive().optional()),
+    maxHeightPx: z.preprocess(emptyToUndefined, z.coerce.number().int().positive().optional()),
 });
 
-/** 画像以外（エラーページなど）をそのまま中継しないための確認。 */
+/**
+ * 画像以外（エラーページなど）をそのまま中継しないための確認。
+ *
+ * SVG はスクリプトを埋め込めるので除く。店舗写真が SVG で返ることはない。
+ */
 function isImageContentType(contentType: string | null): boolean {
-    return (contentType ?? '').toLowerCase().startsWith('image/');
+    const value = (contentType ?? '').toLowerCase();
+    return value.startsWith('image/') && !value.startsWith('image/svg');
 }
 
 function photoResponseHeaders(contentType: string): Headers {
@@ -434,13 +456,13 @@ app.get('/api/photo', async (c) => {
     if (edgeHit) return edgeHit;
 
     // 2 段目: KV（全コロ共有・30 日）。写真代が費用の 9 割を占めるのでここが効く。
-    const kvKey = buildPhotoCacheKey(name, maxWidthPx, maxHeightPx);
+    const kvKey = await buildPhotoCacheKey(name, maxWidthPx, maxHeightPx);
     const cached = await readPhotoCache(c.env, kvKey);
     if (cached) {
         const response = new Response(cached.body, {
             headers: photoResponseHeaders(cached.contentType),
         });
-        runAfterResponse(c, cache.put(edgeCacheKey, response.clone()));
+        runAfterResponse(c, 'photo_edge_cache_put', cache.put(edgeCacheKey, response.clone()));
         return response;
     }
 
@@ -456,7 +478,7 @@ app.get('/api/photo', async (c) => {
 
     try {
         const upstream = await fetchPhoto(c.env, name, maxWidthPx, maxHeightPx);
-        runAfterResponse(c, incrementBudget(c.env.CACHE, 'photo'));
+        runAfterResponse(c, 'budget_photo', incrementBudget(c.env.CACHE, 'photo'));
 
         const contentType = upstream.headers.get('Content-Type');
         if (!isImageContentType(contentType)) {
@@ -470,8 +492,16 @@ app.get('/api/photo', async (c) => {
         const body = await upstream.arrayBuffer();
         const headers = photoResponseHeaders(contentType!);
 
-        runAfterResponse(c, cache.put(edgeCacheKey, new Response(body, { headers })));
-        runAfterResponse(c, writePhotoCache(c.env, kvKey, body, contentType!));
+        runAfterResponse(
+            c,
+            'photo_edge_cache_put',
+            cache.put(edgeCacheKey, new Response(body, { headers })),
+        );
+        runAfterResponse(
+            c,
+            'photo_cache_write',
+            writePhotoCache(c.env, kvKey, body, contentType!),
+        );
 
         return new Response(body, { headers });
     } catch (error) {

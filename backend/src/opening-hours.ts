@@ -45,12 +45,20 @@ function minuteOfWeek(point: { day: number; hour: number; minute: number }): num
     return point.day * MINUTES_PER_DAY + point.hour * 60 + point.minute;
 }
 
+/** 値域まで見る。想定外の値（day: 7 など）を通すと週境界が静かにずれる。 */
 function isValidPoint(point: { day: number; hour: number; minute: number } | undefined): boolean {
+    if (point == null) return false;
+
     return (
-        point != null &&
-        Number.isFinite(point.day) &&
-        Number.isFinite(point.hour) &&
-        Number.isFinite(point.minute)
+        Number.isInteger(point.day) &&
+        point.day >= 0 &&
+        point.day <= 6 &&
+        Number.isInteger(point.hour) &&
+        point.hour >= 0 &&
+        point.hour <= 23 &&
+        Number.isInteger(point.minute) &&
+        point.minute >= 0 &&
+        point.minute <= 59
     );
 }
 
@@ -76,9 +84,9 @@ export function computeOpeningStatus(
         if (!isValidPoint(period.open)) continue;
 
         // close が無い = 24 時間営業。
-        if (!period.close || !isValidPoint(period.close)) {
-            return { openNow: true };
-        }
+        if (!period.close) return { openNow: true };
+        // 値が壊れている period は「24 時間営業」ではなく無視する。
+        if (!isValidPoint(period.close)) continue;
 
         const start = minuteOfWeek(period.open);
         let end = minuteOfWeek(period.close);

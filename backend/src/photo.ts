@@ -1,3 +1,5 @@
+import { sha256Hex } from './cache';
+
 /**
  * 写真 URL の署名とサイズの正規化。
  *
@@ -73,11 +75,18 @@ function hexToBytes(hex: string): Uint8Array | null {
     return bytes;
 }
 
-/** 写真バイナリの KV キー。サイズを正規化した後の値で作ること。 */
-export function buildPhotoCacheKey(
+/**
+ * 写真バイナリの KV キー。サイズを正規化した後の値で作ること。
+ *
+ * 写真リソース名は実測で 457〜494 文字ある。そのまま連結すると
+ * `photo:v1:` + name + `:800x800` で **511 バイト**になり、KV のキー上限 512 バイトに
+ * 1 バイトしか余裕がない。少しでも長い名前が来た瞬間に写真キャッシュが静かに死ぬ
+ * （= 費用対策が丸ごと効かなくなる）ので、検索キーと同じくハッシュにして長さを固定する。
+ */
+export async function buildPhotoCacheKey(
     photoName: string,
     maxWidthPx: number,
     maxHeightPx: number,
-): string {
-    return `photo:v1:${photoName}:${maxWidthPx}x${maxHeightPx}`;
+): Promise<string> {
+    return `photo:v1:${await sha256Hex(photoName)}:${maxWidthPx}x${maxHeightPx}`;
 }

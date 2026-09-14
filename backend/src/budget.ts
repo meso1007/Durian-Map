@@ -43,6 +43,10 @@ export function buildBudgetKey(kind: BudgetKind, now: Date): string {
  *
  * KV が読めないときは **fail open**（通す）。ここで止めるとキャッシュ障害が
  * そのままサービス停止になるため。取りこぼしは Google Cloud 側の予算アラートで拾う。
+ *
+ * 判定と加算は別々の KV 操作なので**ソフトリミット**である。上限付近に同時アクセスが
+ * 来ると数回分は超えうる。厳密に止めたいなら Durable Object が要るが、ここでの目的は
+ * 「桁が変わる請求を止める」ことなので、その精度は要らない。
  */
 export async function isBudgetExceeded(
     store: CounterStore,
