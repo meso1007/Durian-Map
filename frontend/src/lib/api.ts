@@ -19,6 +19,10 @@ export type Cafe = {
     rating?: number;
     userRatingCount?: number;
     openNow?: boolean;
+    /** 曜日別の営業時間（7 要素・日本語）。取得できないときは undefined。 */
+    weekdayDescriptions?: string[];
+    /** 国内向け表記の電話番号。 */
+    phone?: string;
     /** Places の写真リソース名。表示は getCafePhotoUrl() を通す。 */
     photoName?: string;
 };

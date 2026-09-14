@@ -60,6 +60,22 @@
 | 公園・緑地 | `#D5EBB0` |
 | ラベル文字 | `#5C6B4A`（駅名・地名は表示する） |
 
+## 営業状態の表現
+
+バッジだけでなく、**カードの枠線と地図ピンの枠**でも営業状態を表す。
+枠線・ピン枠は非テキスト要素なので必要なコントラストは **3:1**（`-500` 系をそのまま使ってよい）。
+**文字には使わないこと** — 文字は下の「使用ルール」に従う。
+
+| 状態 | バッジ | カード枠線 | 地図ピンの枠 |
+|---|---|---|---|
+| 営業中 (`openNow === true`) | lime-100 地 / `--dm-success-text` | `--dm-success` `#2E8B57` | `--durian-green-900` `#14532D` |
+| 準備中 (`openNow === false`) | hibiscus-100 地 / `--dm-accent-text` | `--tropic-hibiscus-500` `#E2467C` | 同左 |
+| 不明 (`undefined`) | 出さない | `--dm-border` | `#FFFFFF` |
+
+> ピンだけ濃い緑にしているのは、ピン本体が黄緑（`#8FC63C`）で `-500` の緑だと枠が埋もれるため。
+> 実装は `frontend/src/app/page.tsx` の `openStatusBorder()` と
+> `frontend/src/app/components/MapView.tsx` の `statusRingColor()`。
+
 ## 使用ルール
 
 - 緑（primary）とマンゴー（CTA）は同じ画面で役割を分ける。CTA は「現在地の周辺で探す」など 1 画面につき 1 つ。

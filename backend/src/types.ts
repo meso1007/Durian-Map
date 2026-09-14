@@ -20,7 +20,12 @@ export type Place = {
     location?: { latitude: number; longitude: number };
     rating?: number;
     userRatingCount?: number;
-    regularOpeningHours?: { openNow: boolean };
+    regularOpeningHours?: {
+        openNow: boolean;
+        /** 「月曜日: 8時00分～19時00分」形式の 7 要素。ロケールは API のリクエスト言語に従う。 */
+        weekdayDescriptions?: string[];
+    };
+    nationalPhoneNumber?: string;
     photos?: Array<{ name: string }>;
 };
 
@@ -36,6 +41,10 @@ export type Lead = {
     rating?: number;
     userRatingCount?: number;
     openNow?: boolean;
+    /** 曜日別の営業時間（7 要素）。取得できないときは undefined。 */
+    weekdayDescriptions?: string[];
+    /** 国内向け表記の電話番号。 */
+    phone?: string;
     /** Places の写真リソース名。表示は /api/photo 経由で行う（API キーを露出させないため）。 */
     photoName?: string;
 };

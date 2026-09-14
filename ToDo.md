@@ -29,6 +29,10 @@
 
 ## 優先度：高
 
+- [ ] **同じ Worker を複数ワークツリーからデプロイしている**
+      `../iOS`（`GaloisExtension/iOS`）の `backend/wrangler.jsonc` も Worker 名が
+      `durian-map-api` で、デプロイし合うと互いの変更が消える。実際に一度上書きされた。
+      ブランチごとに検証するなら Worker 名か環境（`wrangler.jsonc` の `env`）を分ける
 - [ ] **Pages のプレビューデプロイが CORS で弾かれる**
       `backend/src/index.ts` の許可オリジン判定は**完全一致**なので、
       `https://<hash>.durian-map.pages.dev` からは検索できない。動作確認は本番 URL で行う。
@@ -88,6 +92,11 @@
 - [x] `ALLOWED_ORIGINS` に本番 URL を追加して Worker を再デプロイ
 - [x] ロゴを 2.0MB → 61KB / 365KB にリサイズ（画像最適化を無効にしたため）
 - [x] 未使用依存（leaflet 系）と create-next-app 残骸の SVG を削除
+- [x] モバイル UI を `.pen` に寄せて作り直し（検索をヘッダーへ / シートはリスト専用 / 下部タブバー）
+- [x] ロゴを `.pen` からベクタ化（`designs/pen-logo-to-svg.py` → `logo.svg` / PWA アイコン）
+- [x] 営業時間・電話番号を追加（課金ティアは据え置き）
+- [x] 営業状態をカード枠線と地図ピンの枠で表現
+- [x] 距離表示と「近い順」並び替え（現在地があるときのみ）
 
 > 旧 ToDo にあった「バックエンド: Render (render.yaml)」は廃止。
 > サーバーはすべて Cloudflare（API = Workers、フロント = Pages）。

@@ -14,6 +14,7 @@ const FIELD_MASK = [
     'places.rating',
     'places.userRatingCount',
     'places.regularOpeningHours',
+    'places.nationalPhoneNumber',
     'places.photos',
 ].join(',');
 
