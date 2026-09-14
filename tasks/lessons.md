@@ -240,3 +240,74 @@ App Store Connect のアップロードで弾かれる。
 
 **ルール**: アイコンを書き出すときは `rx` を 0 にし、地の色で `flatten` する。
 確認は `Image.open(p).mode`（`RGB` であること）と四隅の画素で機械的にできる。
+
+## 2026-09-15: 総合レビュー → P0 実装 → デプロイ
+
+### main だけ見て現状を判断しない
+
+`main` の README は「フロント未デプロイ」だったが、実際は別ワークツリー（`~/orca/workspaces/…`、
+`GaloisExtension/iOS`）の成果物が Worker も Pages も本番で動いていた。両ブランチが同じ Worker を
+別々にデプロイして上書きし合う事故も起きていた。
+
+**ルール**: 着手時に `git worktree list` / `git branch -a` を見て、main より進んだブランチを先に洗う。
+本番の実体は `curl` でスキーマを叩いて確認する（`weekdayDescriptions` があるか等）。
+
+### 「入力長の上限が無い」系は実データの長さを測る
+
+写真リソース名は実測 457〜494 文字。`photo:v1:<name>:800x800` は 511 バイトで KV の上限 512 に
+残り 1 バイトだった。名前が少し伸びた瞬間に写真キャッシュが静かに死に、費用対策が丸ごと無効になる。
+→ キーは SHA-256 でハッシュ化（固定長）。
+
+**ルール**: 外部 API 由来の値をキーに使うときは、実データの長さを測ってから上限を設計する。
+レビューで LOW に見えても、費用対策の中核に効く箇所は実測する。
+
+### ドメインのブロックリストは「200 が返るか」で実在確認しない
+
+`veloce.jp` は高級バッグ通販、`kohikan.jp` はスパム、`musashinomori.jp` は病院だった。
+title まで見て初めて分かる。逆に `doutor.co.jp` は実在するのに sandbox からは応答が無く、
+否定側の判定には使えない。
+
+**ルール**: 店名のトークンで拾い、ドメインは**店舗ブランドの公式サイト**だけ、
+持株会社ドメイン（`ucc.co.jp` 等）は入れない。追加時は `chains.test.ts` に固定例を足す。
+
+### `next/font/google` の CJK は既定の `preload: true` が地雷
+
+4 ウェイトで `<link rel="preload">` が 362 本 / 5.3MB 出ていた。`preload: false` +
+`display: 'swap'` + `fallback` を必ず付ける。
+
+**ルール**: ビルド後に `grep -o 'rel="preload"' out/index.html | wc -l` が 1 桁であることを
+検証条件にする（今回 362 → 4）。
+
+### eslint-config-next 16 は effect 内 setState / 描画中の ref 書き込みを error にする
+
+`useCallback` の中身まで追うので、その中に `setState` があるだけで落ちる。
+
+**ルール**: 「props から派生する state」は effect ではなく描画中に調整し、
+マウント時の値は `useState(() => 初期値)` で最初から入れる。
+
+### chrome-devtools MCP は 1 プロファイル 1 プロセス
+
+並行エージェントが掴んでいると `isolatedContext` でも回避できず、相手の Chrome を落とすのは厳禁。
+
+**ルール**: 並行して UI 検証するときは `puppeteer-core` + 自前 `userDataDir` で独立 Chrome を立てる。
+静的書き出しの検証は `ALLOWED_ORIGINS` に入っているポートで配信する（ポート違いは CORS で
+全滅してコードの不具合に見える）。dev でだけ出る `?_rsc=` の 404 を本番の不具合と混同しない。
+
+### サブエージェントのワークツリーは main 起点で作られる
+
+`isolation: worktree` のワークツリーは作業ブランチではなく `main` から切られる。
+指示に「このブランチにしか無いファイル」があると、エージェントが自分で fast-forward することになる。
+
+**ルール**: ワークツリーで並行実装させるときは、プロンプトに「まず `git merge --ff-only <作業ブランチ>`
+してから着手」と明記する。マージ後は自分で typecheck / test / lint / build を再実行する。
+
+### pen CLI の `--in` は元ファイルのフレームをそのまま引き継ぐ
+
+`--in` でブランド変数を継承させると、旧画面フレームも出力に残る。ブランド一貫性のためには有効だが、
+成果物の説明に「既存フレームを含む」と書いておく。Co Headline のような商用フォントは
+pen.dev のレンダラに無く、変数で代替（Outfit）される。
+
+### 秘密情報は TTY 無しでも `< file` で入る
+
+`wrangler secret put NAME < file` なら対話プロンプト無しで正しい値が入る（空保存の事故は
+プロンプトが EOF を読んだときだけ）。設定後は `/health` の `*Configured: true` で値が空でないことを確認する。
