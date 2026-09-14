@@ -5,8 +5,8 @@ import { memo } from 'react';
 
 import { getCafePhotoUrl } from '@/lib/api';
 import type { Cafe } from '@/lib/api';
-import { getOpeningTime, openStatusBorder } from '@/lib/cafe';
-import { formatDistance } from '@/lib/geo';
+import { getOpenStatusLabel, openStatusBorder } from '@/lib/cafe';
+import { formatDistance, formatWalkingMinutes } from '@/lib/geo';
 import type { SavedStatus } from '@/lib/storage';
 
 import { CheckIcon, ClockIcon, CupIcon, StarIcon } from './icons';
@@ -28,8 +28,8 @@ type Props = {
  * onSelect は id を受け取る形にしてカードごとのクロージャを作らない。
  */
 function CafeCard({ cafe, distance, isSelected, savedStatus, onSelect }: Props) {
-  const photoUrl = getCafePhotoUrl(cafe);
-  const openingTime = getOpeningTime(cafe.weekdayDescriptions);
+  const photoUrl = getCafePhotoUrl(cafe, 200);
+  const openStatus = getOpenStatusLabel(cafe);
 
   return (
     <button
@@ -68,15 +68,24 @@ function CafeCard({ cafe, distance, isSelected, savedStatus, onSelect }: Props) 
             <>
               {cafe.rating != null && <span aria-hidden>·</span>}
               <span className="num">{formatDistance(distance)}</span>
+              {/* 距離より「歩いて何分か」のほうが行くかどうかの判断に効く。 */}
+              <span className="num">{formatWalkingMinutes(distance)}</span>
             </>
           )}
 
-          {openingTime && (
+          {/*
+            営業中なら「21:00まで」、閉店中なら「8:00から」。
+            時刻はサーバーがレスポンス時に JST で計算した値（closesAt / opensAt）。
+          */}
+          {openStatus && (
             <>
               <span aria-hidden>·</span>
               <span className="inline-flex items-center gap-1">
                 <ClockIcon className="w-3 h-3" />
-                <span className="num">{openingTime}-</span>
+                <span>
+                  <span className="num">{openStatus.value}</span>
+                  {openStatus.suffix}
+                </span>
               </span>
             </>
           )}

@@ -73,6 +73,10 @@ export default function SearchPanel({ compact, isLocating, isSearching, initialA
           </button>
         )}
 
+        {/*
+          text-base（16px）は iOS の自動ズーム対策。これ未満にしないこと（docs/design.md 6節）。
+          focus:outline-none はキーボード操作で現在地が分からなくなるので使わない。
+        */}
         <input
           type="text"
           value={area}
@@ -80,7 +84,7 @@ export default function SearchPanel({ compact, isLocating, isSearching, initialA
           list="popular-areas"
           aria-label="検索したいエリア名"
           placeholder="エリア名からさがす"
-          className="flex-1 min-w-0 h-12 px-4 rounded-xl bg-surface text-base text-text placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-lime"
+          className="flex-1 min-w-0 h-12 px-4 rounded-xl bg-surface text-base text-text placeholder-text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary focus:ring-2 focus:ring-lime"
         />
         <datalist id="popular-areas">
           {POPULAR_AREAS.map((name) => (

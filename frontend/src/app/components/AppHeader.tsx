@@ -16,12 +16,12 @@ export default function AppHeader({ children }: { children: React.ReactNode }) {
         ブランドロックアップ。マークがワードマークの "D" を兼ねるので、
         表示テキストは "urian Map"、読み上げは aria-label で "Durian Map" にする。
       */}
-      <div className="flex items-center gap-1" aria-label="Durian Map" role="img">
+      <h1 className="flex items-center gap-1" aria-label="Durian Map">
         <Image src="/logo.svg" alt="" width={56} height={56} priority className="h-12 w-12 shrink-0" />
         <span aria-hidden className="font-display text-2xl md:text-3xl font-bold text-cream leading-none -ml-1">
           urian Map
         </span>
-      </div>
+      </h1>
 
       {children}
     </header>

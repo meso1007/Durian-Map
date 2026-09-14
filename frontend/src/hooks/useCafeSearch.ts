@@ -21,9 +21,13 @@ export function snapRadius(meters: number): SearchRadius {
     );
 }
 
-export type SearchRequest =
-    | { area: string }
-    | { coordinates: Coordinates; radius?: SearchRadius };
+/**
+ * 何を検索したか。URL に載る形と 1 対 1 に対応させてあるので、
+ * これがそのまま共有リンクとリロード時の復元に使える。
+ */
+export type SearchQuery =
+    | { kind: 'area'; area: string }
+    | { kind: 'nearby'; coordinates: Coordinates; radius: SearchRadius };
 
 /**
  * 検索の状態。「読み込み中なのに結果がある」のような表現できない組み合わせを
@@ -47,6 +51,9 @@ const GENERIC_ERROR = 'カフェの検索に失敗しました。しばらく経
 export function useCafeSearch(onError: (message: string) => void) {
     const [state, setState] = useState<CafeSearchState>({ status: 'idle' });
 
+    /** 直近に投げた検索条件。URL への書き戻しと共有リンクが参照する。 */
+    const [query, setQuery] = useState<SearchQuery | null>(null);
+
     const abortRef = useRef<AbortController | null>(null);
     const generationRef = useRef(0);
 
@@ -56,10 +63,11 @@ export function useCafeSearch(onError: (message: string) => void) {
     useEffect(() => () => abortRef.current?.abort(), []);
 
     const search = useCallback(
-        async (request: SearchRequest) => {
-            const mode: SearchMode = 'coordinates' in request ? 'nearby' : 'area';
+        async (request: SearchQuery) => {
+            if (request.kind === 'area' && !request.area.trim()) return;
 
-            if (mode === 'area' && !hasSearchableArea(request)) return;
+            const mode: SearchMode = request.kind === 'nearby' ? 'nearby' : 'area';
+            setQuery(normalizeQuery(request));
 
             abortRef.current?.abort();
             const controller = new AbortController();
@@ -70,12 +78,8 @@ export function useCafeSearch(onError: (message: string) => void) {
 
             try {
                 const results = await searchCafes(
-                    'coordinates' in request
-                        ? {
-                              category: 'カフェ',
-                              location: request.coordinates,
-                              radius: request.radius ?? DEFAULT_NEARBY_RADIUS,
-                          }
+                    request.kind === 'nearby'
+                        ? { category: 'カフェ', location: request.coordinates, radius: request.radius }
                         : { category: 'カフェ', area: request.area.trim() },
                     controller.signal,
                 );
@@ -98,10 +102,20 @@ export function useCafeSearch(onError: (message: string) => void) {
         [onError],
     );
 
-    return { state, search, completedCount };
+    return {
+        state,
+        query,
+        search,
+        completedCount,
+        results: state.status === 'success' ? state.results : EMPTY_RESULTS,
+        isLoading: state.status === 'loading',
+        hasSearched: state.status !== 'idle',
+    };
 }
 
-/** エリア検索は空文字では投げない（API を無駄に叩かない）。 */
-function hasSearchableArea(request: SearchRequest): boolean {
-    return 'area' in request && request.area.trim().length > 0;
+const EMPTY_RESULTS: Cafe[] = [];
+
+/** 前後の空白など、URL に載せる前に整える。 */
+function normalizeQuery(query: SearchQuery): SearchQuery {
+    return query.kind === 'area' ? { kind: 'area', area: query.area.trim() } : query;
 }

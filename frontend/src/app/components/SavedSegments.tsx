@@ -1,8 +1,6 @@
 'use client';
 
-import type { SavedStatus } from '@/lib/storage';
-
-export type SavedFilter = 'all' | SavedStatus;
+import type { SavedFilter } from '@/hooks/useCafeFilters';
 
 /** 保存タブのセグメンテッドコントロール（.pen の Filter Segmented）。 */
 export default function SavedSegments({

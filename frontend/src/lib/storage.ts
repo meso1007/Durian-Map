@@ -86,13 +86,20 @@ export async function loadSavedCafes(): Promise<SavedCafe[]> {
     }
 }
 
-/** 保存済みカフェを書き込む。容量超過などで失敗しても例外は投げない。 */
-export async function saveSavedCafes(cafes: SavedCafe[]): Promise<void> {
+/**
+ * 保存済みカフェを書き込む。
+ *
+ * 例外は投げず、成功したかどうかを返す。呼び出し側は失敗を検知して
+ * 画面を元に戻し、ユーザーに伝えること（無言で失敗させない / docs/design.md 5節）。
+ */
+export async function saveSavedCafes(cafes: SavedCafe[]): Promise<boolean> {
     try {
         await writeRaw(JSON.stringify(cafes));
+        return true;
     } catch (error) {
-        // QuotaExceededError など。保存に失敗しても操作自体は続行させる。
+        // QuotaExceededError、プライベートモードでの書き込み拒否など。
         console.error('Failed to persist saved cafes:', error);
+        return false;
     }
 }
 

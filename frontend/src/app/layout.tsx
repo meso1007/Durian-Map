@@ -44,7 +44,9 @@ export const viewport: Viewport = {
   themeColor: "#1F6B3F", // ヘッダーの --dm-primary に合わせる
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1, // iOS Safariのズーム防止
+  // maximumScale は指定しない。ピンチズームを塞ぐのは WCAG 1.4.4 違反で、
+  // 本来の目的（入力時の自動ズーム防止）は入力欄を 16px 以上にすることで
+  // すでに達成している。→ docs/design.md 6節
   viewportFit: "cover", // ノッチ/ホームインジケータ領域まで描画し env(safe-area-inset-*) を有効にする
 };
 

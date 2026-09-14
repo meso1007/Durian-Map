@@ -12,20 +12,25 @@ const EARTH_RADIUS_METERS = 6371000;
 /** 徒歩の速度。不動産表示の慣習に合わせて 80m/分。 */
 const WALKING_METERS_PER_MINUTE = 80;
 
+/** 2 点間の直線距離（m）。 */
+export function distanceBetween(from: Coordinates, to: Coordinates): number {
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const dLat = toRad(to.lat - from.lat);
+    const dLng = toRad(to.lng - from.lng);
+    const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) * Math.sin(dLng / 2) ** 2;
+
+    return 2 * EARTH_RADIUS_METERS * Math.asin(Math.sqrt(a));
+}
+
 /** 現在地からの直線距離（m）。座標が欠けていれば null。 */
 export function getDistanceMeters(from: Coordinates | null, cafe: Cafe): number | null {
     if (!from || cafe.lat == null || cafe.lng == null) {
         return null;
     }
 
-    const toRad = (deg: number) => (deg * Math.PI) / 180;
-    const dLat = toRad(cafe.lat - from.lat);
-    const dLng = toRad(cafe.lng - from.lng);
-    const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRad(from.lat)) * Math.cos(toRad(cafe.lat)) * Math.sin(dLng / 2) ** 2;
-
-    return 2 * EARTH_RADIUS_METERS * Math.asin(Math.sqrt(a));
+    return distanceBetween(from, { lat: cafe.lat, lng: cafe.lng });
 }
 
 export function formatDistance(meters: number): string {

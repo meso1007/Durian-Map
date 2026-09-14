@@ -14,6 +14,8 @@ type Props = {
   selectedId: string | null;
   getSavedStatus: (cafeId: string) => SavedStatus | undefined;
   onSelect: (id: string) => void;
+  /** 件数を読み上げてよいか（未検索のうちは「0件」と言わせない）。 */
+  announceResults: boolean;
   /** 0 件のときの文言。状況（未検索 / 絞り込み過多 / 保存なし）で変える。 */
   empty: { title: string; description: string };
   listRef: React.RefObject<HTMLDivElement | null>;
@@ -26,11 +28,20 @@ export default function CafeList({
   selectedId,
   getSavedStatus,
   onSelect,
+  announceResults,
   empty,
   listRef,
 }: Props) {
   return (
-    <div ref={listRef} className="flex-1 overflow-y-auto pb-4 flex flex-col gap-2 scroll-smooth">
+    <div ref={listRef} aria-busy={isLoading} className="flex-1 overflow-y-auto pb-4 flex flex-col gap-2 scroll-smooth">
+      {/*
+        件数の読み上げ。スケルトンは aria-hidden なので、読み上げ環境には
+        ここだけが「検索中」「N 件見つかりました」として届く。
+      */}
+      <span className="sr-only" role="status" aria-live="polite">
+        {!announceResults ? null : isLoading ? "検索中" : `${cafes.length}件見つかりました`}
+      </span>
+
       {isLoading && (
         <div className="flex flex-col gap-2 animate-pulse" aria-hidden>
           {[1, 2, 3].map((i) => (

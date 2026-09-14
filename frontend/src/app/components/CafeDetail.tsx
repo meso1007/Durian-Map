@@ -1,11 +1,19 @@
 'use client';
 
 import Image from 'next/image';
+import { useEffect, useRef } from 'react';
 
 import { getCafePhotoUrl } from '@/lib/api';
 import type { Cafe } from '@/lib/api';
-import { getCafeDomain, getCafeMapUrl, getCategoryLabel, getTodayHours, parseCafeWebsite } from '@/lib/cafe';
-import { formatDistance } from '@/lib/geo';
+import {
+  getCafeDomain,
+  getCafeMapUrl,
+  getCategoryLabel,
+  getOpenStatusLabel,
+  getTodayHours,
+  parseCafeWebsite,
+} from '@/lib/cafe';
+import { formatDistance, formatWalkingMinutes } from '@/lib/geo';
 import { shareUrl } from '@/lib/share';
 import type { SavedStatus } from '@/lib/storage';
 
@@ -47,6 +55,7 @@ export default function CafeDetail({
   onNotify,
 }: Props) {
   const isSaved = savedStatus !== undefined;
+  const openStatus = getOpenStatusLabel(cafe);
   const mapUrl = getCafeMapUrl(cafe);
   const website = parseCafeWebsite(cafe);
   const domain = getCafeDomain(cafe);
@@ -65,8 +74,21 @@ export default function CafeDetail({
     }
   };
 
+  // パネルが現れたらフォーカスを移す。移さないとキーボード / 読み上げの利用者は
+  // 「カードを押したのに何も起きていない」ように感じる。閉じたときの復帰は
+  // 呼び出し側（useMapSelection の dismiss）が元のカードへ戻す。
+  const panelRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    panelRef.current?.focus({ preventScroll: true });
+  }, [cafe.id]);
+
   return (
-    <section className="rounded-2xl border border-border bg-surface shadow-card overflow-hidden">
+    <section
+      ref={panelRef}
+      tabIndex={-1}
+      aria-label={`${cafe.name} の詳細`}
+      className="rounded-2xl border border-border bg-surface shadow-card overflow-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+    >
       {photoUrl && (
         <div className="relative h-32 w-full bg-surface-sunken">
           <Image src={photoUrl} alt="" width={400} height={160} unoptimized className="h-full w-full object-cover" />
@@ -85,7 +107,24 @@ export default function CafeDetail({
               <p className="mt-1 text-sm leading-[1.6] text-text-muted">
                 {categoryLabel}
                 {categoryLabel && distance != null && <span aria-hidden>　・　</span>}
-                {distance != null && <span className="num">現在地から{formatDistance(distance)}</span>}
+                {distance != null && (
+                  <>
+                    <span className="num">現在地から{formatDistance(distance)}</span>
+                    <span aria-hidden>　・　</span>
+                    <span className="num">徒歩{formatWalkingMinutes(distance)}</span>
+                  </>
+                )}
+              </p>
+            )}
+
+            {/* 営業中なら「21:00まで」、閉店中なら「8:00から」。 */}
+            {openStatus && (
+              <p className="mt-1 inline-flex items-center gap-1 text-sm leading-[1.6] text-text-muted">
+                <ClockIcon className="w-4 h-4" />
+                <span>
+                  <span className="num">{openStatus.value}</span>
+                  {openStatus.suffix}
+                </span>
               </p>
             )}
           </div>
