@@ -1,6 +1,6 @@
 # プラットフォーム方針（Web / iOS）
 
-最終更新: 2026-09-13
+最終更新: 2026-09-14
 
 ## 結論
 
@@ -16,9 +16,12 @@ backend/                         # Cloudflare Workers（Hono）← API の正
   src/index.ts                   # ルーティング / CORS / レート制限 / バリデーション
   src/places.ts                  # Google Places クライアント、写真取得
   src/cache.ts  src/ratelimit.ts # KV キャッシュ / レート制限
-frontend/
+frontend/                        # Cloudflare Pages（静的書き出し）
+  next.config.ts                 # output: 'export' ← Pages / Capacitor 共通の前提
   src/app/page.tsx               # 画面本体
   src/app/components/MapView.tsx # Google Maps
+  src/lib/api.ts                 # Workers API クライアント（UI から直 fetch しない）
+  src/lib/storage.ts             # 永続化の抽象化（UI から localStorage を直呼びしない）
   public/manifest.json           # PWA マニフェスト（導入済み）
 designs/durian-map-tropical.pen  # デザイン案（.pen）
 docs/design.md                   # デザイン規約 ← UI を触る人はこれを読む
@@ -52,17 +55,29 @@ B を採る理由:
       `frontend/src/lib/storage.ts` に集約。API は非同期にしてあるので、実体を
       Capacitor Preferences やサーバー保存に差し替えても UI 側の修正は不要。
       **UI コンポーネントから `localStorage` を直接呼ばないこと。**
-- [ ] **3. Capacitor 導入** — 準備は整った。次はこれ
+- [x] **3. 静的書き出しの検証** — 完了
+      `output: 'export'` でビルドが通ることを確認済み（`frontend/next.config.ts`）。
+      サーバー機能は元から不使用、`useSearchParams` も Suspense 境界の内側にあった。
+      画像最適化だけ `images.unoptimized` で無効化している。
+- [ ] **4. Capacitor 導入** — 次はこれ。静的書き出しという前提条件は満たした
 
 ## デプロイ先
 
 | レイヤ | 環境 | URL |
 |---|---|---|
 | API | Cloudflare Workers（`durian-map-api`） | https://durian-map-api.dailyreading.workers.dev |
-| フロント | 未デプロイ（Vercel 想定） | — |
+| フロント | Cloudflare Pages（`durian-map`） | https://durian-map.pages.dev |
 
-**フロントを本番デプロイしたら、その URL を `backend/wrangler.jsonc` の `ALLOWED_ORIGINS` に
-追加して再デプロイすること。** 忘れると本番で CORS に弾かれる。
+サーバーはすべて Cloudflare に寄せる方針。フロントは `output: 'export'` の静的書き出しを
+`wrangler pages deploy` で直接アップロードしている（`cd frontend && bun run deploy`）。
+
+**許可オリジンは `backend/wrangler.jsonc` の `ALLOWED_ORIGINS`**。判定は完全一致なので、
+Pages のプレビューデプロイ（`https://<hash>.durian-map.pages.dev`）は CORS で弾かれる。
+本番ドメインでの確認を正とする。
+
+> Cloudflare は Pages を Workers 側へ統合中で、`wrangler pages project create` は
+> 既定で Workers へ委譲される。この `durian-map` プロジェクトは `--force` を付けて
+> 従来の Pages 側に作成済み。**以降のコマンドに `--force` は不要**。
 
 ## やらないこと
 

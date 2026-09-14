@@ -32,3 +32,36 @@ workers.dev のサブドメインも変わるので URL の総置換が必要。
 
 **ルール**: 報告された 1 件を直す前に、**同じ原因で起きうる箇所を機械的に全部列挙する**。
 サブエージェントの報告は網羅的とは限らない。
+
+## 2026-09-14: Cloudflare Pages / 静的書き出し
+
+### Cloudflare Pages は Workers へ統合中。初回作成だけ `--force` が要る
+
+`wrangler pages project create <name>` は既定で「最新版の Pages（= Workers）」へ
+**委譲**され、`wrangler.jsonc` の `assets` が無いと
+`Missing entry-point to Worker script or to assets directory` で失敗する。
+wrangler 自身が「そのまま再実行しても同じように失敗する」と警告してくる。
+
+**ルール**: 従来の Pages にプロジェクトを作るなら初回だけ `--force` を付ける。
+プロジェクトが出来た後の `wrangler pages deploy` には `--force` は不要（付けない）。
+今後の新規案件は Workers 静的アセット（`assets.directory`）側に寄せるほうが素直。
+
+### `images.unoptimized` にするときは `public/` の画像サイズを必ず確認する
+
+`output: 'export'` では `next/image` の最適化サーバーが無くなるので
+`images.unoptimized: true` が要る。これは「元ファイルがそのまま配信される」ということ。
+このリポジトリでは `logo.png` が 1024px / **2.0MB** あり、44px 表示と PWA アイコンに
+共用されていた。最適化に守られて問題が見えていなかった。
+
+**ルール**: 画像最適化を外す変更をしたら、その場で `find public -size +100k` を走らせ、
+表示サイズに合った画像を用意し直す。
+
+### 静的書き出しの `NEXT_PUBLIC_*` は `.env.local` に食われる
+
+`NEXT_PUBLIC_*` はビルド時にバンドルへ焼き込まれる。開発用の `.env.local` は
+`.env.production` より**優先度が高い**ため、`.env.production` に本番 URL を書いても
+`.env.local` の localhost が本番バンドルに入り込む。
+
+**ルール**: 本番ビルドの値は package.json のスクリプト内で環境変数として渡す
+（コマンドラインの env は `.env.local` より優先される）。
+デプロイ後は `grep -rl "localhost" out/` が空であることを確認する。

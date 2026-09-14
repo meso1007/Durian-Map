@@ -16,10 +16,12 @@
       Next.js の `/api/search` は削除し Workers に一本化
 - [x] **2. localStorage を抽象化する**
       `frontend/src/lib/storage.ts`。UI 層からの直呼びは 0 件
-- [ ] **3. Capacitor 導入** ← 次はこれ
+- [x] **3. Next.js の静的書き出し（`output: 'export'`）**
+      Cloudflare Pages への移行と同時に完了。`frontend/next.config.ts`。
+      サーバー機能は元から不使用で、詰まったのは画像最適化のみ（`images.unoptimized`）
+- [ ] **4. Capacitor 導入** ← 次はこれ
       - `@capacitor/core` / `@capacitor/ios` の導入と `npx cap add ios`
-      - Next.js を静的書き出し（`output: 'export'`）できるか検証
-        → 現状 `/` は既に static prerender なので見込みはある
+      - `webDir` は `frontend/out`（静的書き出し済み）
       - セーフエリア・スクロールの実機確認
       - App Store 用のアイコン・スプラッシュ
 
@@ -27,10 +29,14 @@
 
 ## 優先度：高
 
-- [ ] **フロントエンドの本番デプロイ（Vercel 想定）**
-      デプロイ後、**`backend/wrangler.jsonc` の `ALLOWED_ORIGINS` にその URL を追加して
-      `cd backend && bun run deploy`**。現在は localhost のみ許可なので、忘れると本番で
-      CORS に弾かれる
+- [ ] **Pages のプレビューデプロイが CORS で弾かれる**
+      `backend/src/index.ts` の許可オリジン判定は**完全一致**なので、
+      `https://<hash>.durian-map.pages.dev` からは検索できない。動作確認は本番 URL で行う。
+      必要になったら `.durian-map.pages.dev` のサフィックス一致を足す
+- [ ] **フォント配信が重い**
+      `next/font/google` の M PLUS Rounded 1c が 505 スライス（`out/_next/static/media` に
+      7.7MB、`@font-face` 宣言だけで CSS 378KB）。ブラウザは必要な unicode-range しか
+      取りに行かないが、CSS 自体はレンダーブロッキング。日本語サブセットの絞り込みを検討
 - [ ] **Google Cloud Console の API キー制限**
       - 地図用キー（`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`）に HTTP リファラー制限
       - Places 用キー（Worker の secret）に API 制限
@@ -78,6 +84,10 @@
 - [x] 地図スタイルをデザイントークンの南国ライトへ
 - [x] バッジのコントラスト比を 4.5:1 以上に修正（営業中 5.51 / 準備中 5.44）
 - [x] `lib/api.ts` / `lib/storage.ts` による接続・永続化レイヤーの分離
+- [x] フロントを静的書き出し化し Cloudflare Pages にデプロイ（https://durian-map.pages.dev）
+- [x] `ALLOWED_ORIGINS` に本番 URL を追加して Worker を再デプロイ
+- [x] ロゴを 2.0MB → 61KB / 365KB にリサイズ（画像最適化を無効にしたため）
+- [x] 未使用依存（leaflet 系）と create-next-app 残骸の SVG を削除
 
 > 旧 ToDo にあった「バックエンド: Render (render.yaml)」は廃止。
-> バックエンドは Cloudflare Workers に移行済み。
+> サーバーはすべて Cloudflare（API = Workers、フロント = Pages）。

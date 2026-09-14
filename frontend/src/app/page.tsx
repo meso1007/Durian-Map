@@ -370,7 +370,7 @@ function CafeFinderContent() {
       {/* ヘッダー (常に上部固定) */}
       <header className="absolute top-0 left-0 right-0 h-20 md:h-[5.5rem] bg-primary rounded-b-[24px] z-40 flex items-center gap-3 px-4 md:px-6">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface">
-          <Image src="/logo.png" alt="" width={44} height={44} priority className="w-9 h-9 object-contain" />
+          <Image src="/logo-192.png" alt="" width={44} height={44} priority className="w-9 h-9 object-contain" />
         </div>
         <div className="min-w-0">
           <p className="font-display text-xl md:text-2xl font-bold text-white leading-tight">Durian Map</p>

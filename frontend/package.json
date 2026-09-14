@@ -5,28 +5,27 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "build:prod": "NEXT_PUBLIC_API_BASE_URL=https://durian-map-api.dailyreading.workers.dev next build",
+    "deploy": "bun run build:prod && wrangler pages deploy out --project-name durian-map --branch main",
     "lint": "eslint"
   },
   "dependencies": {
     "@googlemaps/markerclusterer": "^2.6.2",
     "@vis.gl/react-google-maps": "^1.7.1",
-    "leaflet": "^1.9.4",
     "next": "16.1.6",
     "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "react-leaflet": "^5.0.0"
+    "react-dom": "19.2.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/leaflet": "^1.9.21",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.54.0"
   },
   "ignoreScripts": [
     "sharp",

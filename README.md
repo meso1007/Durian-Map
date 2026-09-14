@@ -16,7 +16,7 @@
 | レイヤ | 技術 | 場所 | デプロイ先 |
 |---|---|---|---|
 | API | Cloudflare Workers / Hono | `backend/` | https://durian-map-api.dailyreading.workers.dev |
-| フロント | Next.js 16 / React 19 / Tailwind v4 | `frontend/` | 未デプロイ（Vercel 想定） |
+| フロント | Next.js 16 / React 19 / Tailwind v4（静的書き出し） | `frontend/` | https://durian-map.pages.dev |
 
 チェーン店判定ロジックの正は `backend/src/chains.ts`。フロントや iOS 側で書き直さないこと。
 
