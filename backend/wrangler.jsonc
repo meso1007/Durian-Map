@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "durian-map-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "ENVIRONMENT": "production",
+    // CORS 許可オリジン（カンマ区切り）。本番フロントの URL が決まったらここに追加する。
+    // 未設定時は localhost:3000 のみ許可（src/index.ts の DEV_ORIGINS）。
+    "ALLOWED_ORIGINS": "http://localhost:3000,http://127.0.0.1:3000"
+  },
+  "kv_namespaces": [
+    {
+      // 検索結果キャッシュ + レート制限カウンタ
+      "binding": "CACHE",
+      "id": "53d639907024463b8b32cbd591ca430c"
+    }
+  ]
+  // GOOGLE_API_KEY は secret。`wrangler secret put GOOGLE_API_KEY` で設定する（ここには書かない）。
+}

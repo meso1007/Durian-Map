@@ -22,9 +22,10 @@
 
 | トークン | HEX | 用途 |
 |---|---|---|
-| `--tropic-mango-500` | `#F6A21B` | 「現在地の周辺で探す」CTA（グラデ上端 `#FBBF3F`） |
+| `--tropic-mango-500` | `#F6A21B` | 「現在地の周辺で探す」CTA（**ベタ塗り**。グラデーションは使わない → `design.md`） |
 | `--tropic-mango-700` | `#D97706` | CTA 押下、注意ラベル |
-| `--tropic-hibiscus-500` | `#E2467C` | 「行きたい」バッジ、保存ハート、準備中バッジ、マップピン A |
+| `--tropic-hibiscus-700` | `#B3164F` | **淡色地に載せる文字用**（準備中バッジの文字、保存中ボタンの文字） |
+| `--tropic-hibiscus-500` | `#E2467C` | 面・枠・アイコン・マップピン A（**文字には使わない**） |
 | `--tropic-hibiscus-100` | `#FCE1EA` | 行きたいバッジ背景、Wi-Fi など桃系タグ |
 | `--tropic-lagoon-500` | `#2BB3B1` | マップピン B、シアン系タグ、現在地マーカー |
 | `--tropic-lagoon-100` | `#D6F2F1` | シアン系タグ背景、地図の水域 |
@@ -46,6 +47,8 @@
 | `--dm-border` | `--durian-cream-200` | 罫線 |
 | `--dm-text` | `--durian-seed-900` | 本文 |
 | `--dm-text-muted` | `--durian-seed-600` | サブテキスト |
+| `--dm-success-text` | `--durian-green-700` | 淡緑地（lime-100）に載せる文字。営業中バッジ |
+| `--dm-accent-text` | `--tropic-hibiscus-700` | 淡桃地（hibiscus-100）に載せる文字。準備中・保存中 |
 
 ## 地図スタイル
 
@@ -62,4 +65,14 @@
 - 緑（primary）とマンゴー（CTA）は同じ画面で役割を分ける。CTA は「現在地の周辺で探す」など 1 画面につき 1 つ。
 - ハイビスカスは「保存・行きたい・準備中」など感情や状態の強調に限定し、面積を小さく使う。
 - テキストはクリーム地に `--durian-seed-900` / `--durian-seed-600` を使い、黄色地に黄色文字の組み合わせは禁止（コントラスト比 4.5:1 未満）。
+- **淡色地（`-100` 系）に文字を載せるときは `-500` をそのまま使わない。** 4.5:1 を満たさない。
+  文字には `--dm-success-text` / `--dm-accent-text` を使う。`-500` は面・枠・アイコン用。
+
+  | 組み合わせ | 比 | 可否 |
+  |---|---|---|
+  | `#2E8B57` on `#E4F3BA`（success-500 on lime-100） | 3.60 | ✗ |
+  | `#1F6B3F` on `#E4F3BA`（success-text on lime-100） | 5.51 | ✓ |
+  | `#E2467C` on `#FCE1EA`（hibiscus-500 on hibiscus-100） | 3.17 | ✗ |
+  | `#B3164F` on `#FCE1EA`（accent-text on hibiscus-100） | 5.44 | ✓ |
 - 濃緑面（ヘッダー・主ボタン）の文字は `#FFFFFF` または `--durian-cream-50`。
+- **グラデーションは使わない。すべてベタ塗り。** 詳細は `docs/design.md`。

@@ -1,16 +1,24 @@
 import type { Metadata, Viewport } from "next";
-import { Geist_Mono, M_PLUS_Rounded_1c } from "next/font/google";
+import { M_PLUS_Rounded_1c } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const geistSans = M_PLUS_Rounded_1c({
-  variable: "--font-geist-sans",
+// 日本語・本文（docs/design.md 2節）
+const rounded = M_PLUS_Rounded_1c({
+  variable: "--font-sans",
   subsets: ["latin"],
   weight: ["400", "500", "700", "800"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+// ロゴ・英字見出し・数値（Co Headline / Dalton Maag）
+const coHeadline = localFont({
+  variable: "--font-display",
+  display: "swap",
+  src: [
+    { path: "./fonts/CoHeadline-Light.woff2", weight: "300", style: "normal" },
+    { path: "./fonts/CoHeadline-Regular.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/CoHeadline-Bold.woff2", weight: "700", style: "normal" },
+  ],
 });
 
 export const metadata: Metadata = {
@@ -24,7 +32,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#FAF8F5",
+  themeColor: "#1F6B3F", // ヘッダーの --dm-primary に合わせる
   width: "device-width",
   initialScale: 1,
   maximumScale: 1, // iOS Safariのズーム防止
@@ -36,10 +44,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ja">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+    // フォント変数は html に付ける（Tailwind の @theme が :root に出す
+    // --font-sans / --font-display の自己参照を、レイヤー外の宣言で上書きするため）
+    <html lang="ja" className={`${rounded.variable} ${coHeadline.variable}`}>
+      <body className="antialiased">
         {children}
       </body>
     </html>

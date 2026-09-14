@@ -5,34 +5,14 @@ import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 
+import { ApiError, getCafePhotoUrl, searchCafes } from '@/lib/api';
+import type { Cafe, Coordinates } from '@/lib/api';
+import { loadSavedCafes, saveSavedCafes } from '@/lib/storage';
+
 const MapView = dynamic(() => import('./components/MapView'), {
   ssr: false,
-  loading: () => <div className="h-full w-full bg-[#182015]" aria-hidden />,
+  loading: () => <div className="h-full w-full bg-surface-sunken" aria-hidden />,
 });
-
-type Cafe = {
-  id: string;
-  name: string;
-  address: string;
-  category?: string;
-  websiteUri?: string;
-  lat?: number;
-  lng?: number;
-  rating?: number;
-  userRatingCount?: number;
-  openNow?: boolean;
-  photoName?: string;
-};
-
-type Coordinates = {
-  lat: number;
-  lng: number;
-};
-
-type SearchResponse = {
-  leads?: Cafe[];
-  error?: string;
-};
 
 type CafeSearchParams = {
   area?: string;
@@ -45,6 +25,14 @@ const DEFAULT_NEARBY_RADIUS_METERS = 1500;
 const getCafeMapUrl = (cafe: Cafe) =>
   `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cafe.name)}&query_place_id=${cafe.id}`;
 
+const getCafeShareUrl = (cafe: Cafe, area: string) => {
+  if (typeof window === 'undefined' || !area.trim()) {
+    return getCafeMapUrl(cafe);
+  }
+
+  return `${window.location.origin}/?area=${encodeURIComponent(area)}&cafeId=${cafe.id}`;
+};
+
 const getCafeDomain = (cafe: Cafe) => {
   try {
     return new URL(cafe.websiteUri ?? '').hostname.replace('www.', '');
@@ -53,14 +41,47 @@ const getCafeDomain = (cafe: Cafe) => {
   }
 };
 
-const getCafePhotoUrl = (cafe: Cafe) => {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  if (!cafe.photoName || !apiKey) {
+// Places API の primaryType（内部識別子）を日本語ラベルにする。
+// 未知の型は内部識別子をそのまま見せず非表示にする。
+const CATEGORY_LABELS: Record<string, string> = {
+  cafe: 'カフェ',
+  coffee_shop: 'コーヒーショップ',
+  tea_house: '日本茶・紅茶専門店',
+  bakery: 'ベーカリー',
+  dessert_shop: 'デザート・スイーツ',
+  ice_cream_shop: 'アイスクリーム',
+  sandwich_shop: 'サンドイッチ',
+  breakfast_restaurant: 'モーニング',
+  brunch_restaurant: 'ブランチ',
+  juice_shop: 'ジューススタンド',
+  bar: 'バー',
+  restaurant: 'レストラン',
+  food_store: '食料品店',
+  store: 'ショップ',
+};
+
+const getCategoryLabel = (category?: string) =>
+  (category && CATEGORY_LABELS[category]) ?? null;
+
+// 現在地からの直線距離（実データ: 端末の座標 × Places の座標）
+const getDistanceMeters = (from: Coordinates | null, cafe: Cafe): number | null => {
+  if (!from || cafe.lat == null || cafe.lng == null) {
     return null;
   }
 
-  return `https://places.googleapis.com/v1/${cafe.photoName}/media?maxHeightPx=400&maxWidthPx=400&key=${apiKey}`;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const earthRadius = 6371000;
+  const dLat = toRad(cafe.lat - from.lat);
+  const dLng = toRad(cafe.lng - from.lng);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(from.lat)) * Math.cos(toRad(cafe.lat)) * Math.sin(dLng / 2) ** 2;
+
+  return 2 * earthRadius * Math.asin(Math.sqrt(a));
 };
+
+const formatDistance = (meters: number) =>
+  meters < 1000 ? `${Math.round(meters / 10) * 10}m` : `${(meters / 1000).toFixed(1)}km`;
 
 // --- データ取得 ---
 const fetchCafes = async ({
@@ -69,24 +90,22 @@ const fetchCafes = async ({
   radius = DEFAULT_NEARBY_RADIUS_METERS,
 }: CafeSearchParams): Promise<{ data: Cafe[]; error: string | null }> => {
   try {
-    const params = new URLSearchParams({ category: 'カフェ' });
-
-    if (coordinates) {
-      params.set('lat', String(coordinates.lat));
-      params.set('lng', String(coordinates.lng));
-      params.set('radius', String(radius));
-    } else if (area) {
-      params.set('area', area);
-    }
-
-    const response = await fetch(`/api/search?${params.toString()}`);
-    if (!response.ok) throw new Error('API request failed');
-    const data = await response.json() as SearchResponse;
-    if (data.error) throw new Error(data.error);
-    return { data: data.leads || [], error: null };
+    const data = await searchCafes(
+      coordinates
+        ? { category: 'カフェ', location: coordinates, radius }
+        : { category: 'カフェ', area: area ?? '' },
+    );
+    return { data, error: null };
   } catch (error) {
     console.error('Error fetching cafes:', error);
-    return { data: [], error: 'カフェの検索に失敗しました。しばらく経ってから再度お試しください。' };
+    // ApiError のメッセージはそのままユーザーに見せてよい（レート制限など）。
+    return {
+      data: [],
+      error:
+        error instanceof ApiError
+          ? error.message
+          : 'カフェの検索に失敗しました。しばらく経ってから再度お試しください。',
+    };
   }
 };
 
@@ -167,17 +186,10 @@ function CafeFinderContent() {
     }
   }, [errorMsg]);
 
-  // 保存済みカフェをマウント後にlocalStorageから復元（SSRとのハイドレーション不一致を防ぐ）
+  // 保存済みカフェをマウント後に復元（SSRとのハイドレーション不一致を防ぐ）
   useEffect(() => {
     const loadSaved = async () => {
-      try {
-        const stored = localStorage.getItem('saved_cafes');
-        if (stored) {
-          setSavedCafes(JSON.parse(stored) as Cafe[]);
-        }
-      } catch {
-        // 壊れたデータは無視
-      }
+      setSavedCafes(await loadSavedCafes());
     };
 
     void loadSaved();
@@ -306,13 +318,18 @@ function CafeFinderContent() {
     search({ area });
   };
 
+  const handleQuickArea = (value: string) => {
+    setArea(value);
+    search({ area: value });
+  };
+
   const toggleSave = (cafe: Cafe) => {
     const isAlreadySaved = savedCafes.some(c => c.id === cafe.id);
     const newSaved = isAlreadySaved
       ? savedCafes.filter(c => c.id !== cafe.id)
       : [...savedCafes, cafe];
     setSavedCafes(newSaved);
-    localStorage.setItem('saved_cafes', JSON.stringify(newSaved));
+    void saveSavedCafes(newSaved);
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -330,53 +347,39 @@ function CafeFinderContent() {
 
   // 定番エリアのオートコンプリート用リスト
   const popularAreas = ['渋谷', '新宿', '池袋', '東京', '銀座', '横浜', '鎌倉', '大阪', '京都', '福岡', '札幌', '名古屋'];
+  const quickAreas = popularAreas.slice(0, 4);
+
+  const listHeading = searchMode === 'nearby' ? 'この辺りのカフェ' : '検索結果';
 
   return (
-    <div className="h-[100dvh] w-full flex flex-col overflow-hidden text-[var(--foreground)] relative isolate">
-      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-16 -top-14 h-48 w-48 rounded-full bg-[radial-gradient(circle_at_30%_30%,rgba(255,250,220,0.95),rgba(183,218,82,0.34)_45%,transparent_72%)] blur-xl" />
-        <div className="absolute right-[-3.5rem] top-24 h-36 w-36 bg-[linear-gradient(180deg,rgba(151,207,62,0.42),rgba(69,99,30,0.14))] opacity-70 [clip-path:polygon(50%_0%,64%_12%,82%_10%,92%_28%,100%_50%,88%_70%,92%_88%,70%_92%,50%_100%,30%_92%,8%_88%,12%_70%,0%_50%,8%_28%,18%_10%,36%_12%)]" />
-        <div className="absolute bottom-20 left-[-2rem] h-40 w-40 rounded-full bg-[radial-gradient(circle_at_40%_40%,rgba(246,238,190,0.92),rgba(237,197,72,0.3)_44%,transparent_76%)] blur-2xl" />
-      </div>
-
+    <div className="h-[100dvh] w-full flex flex-col overflow-hidden bg-surface text-text relative isolate">
       {/* エラートースト通知 */}
-      <div className={`fixed top-20 md:top-24 left-1/2 -translate-x-1/2 z-50 transition-all duration-400 pointer-events-none w-[90%] md:w-auto flex justify-center ${errorMsg ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`}>
-        <div className="bg-[#2f4519]/95 backdrop-blur text-[#fff9df] px-5 py-3 rounded-[22px] border border-[#a7c854]/40 shadow-[0_18px_40px_rgba(68,99,28,0.28)] text-sm font-medium flex items-center gap-3">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f5d75b] text-[#31471a] text-xs font-extrabold">!</span>
-          {errorMsg}
-        </div>
+      <div
+        role="status"
+        aria-live="polite"
+        className={`fixed top-24 left-1/2 -translate-x-1/2 z-50 transition-opacity duration-300 pointer-events-none w-[calc(100%-2rem)] md:w-auto flex justify-center ${errorMsg ? 'opacity-100' : 'opacity-0'}`}
+      >
+        {errorMsg && (
+          <div className="bg-error text-white px-4 py-3 rounded-xl shadow-card text-sm font-bold flex items-center gap-2 max-w-md">
+            <AlertIcon />
+            <span>{errorMsg}</span>
+          </div>
+        )}
       </div>
 
       {/* ヘッダー (常に上部固定) */}
-      <header className="absolute top-0 left-0 right-0 h-[4.5rem] md:h-[5.15rem] bg-[rgba(250,244,210,0.9)] backdrop-blur-xl border-b border-[#d9cd88] z-40 flex items-center justify-between px-4 md:px-6 shadow-[0_18px_45px_rgba(83,110,29,0.18)]">
-        <div className="flex items-center gap-2.5 md:gap-3">
-          <div className="relative flex h-11 w-11 items-center justify-center rounded-[18px] border border-[#90be3b] bg-[linear-gradient(180deg,#b7da52_0%,#7eae33_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_10px_20px_rgba(97,128,34,0.22)]">
-            <div className="absolute inset-1 rounded-[14px] bg-[radial-gradient(circle_at_35%_35%,rgba(255,251,224,0.86),rgba(242,221,115,0.22)_48%,transparent_70%)]" />
-            <Image src="/logo.png" alt="Durian Map Logo" width={44} height={44} priority className="relative z-10 w-9 h-9 md:w-10 md:h-10 object-contain drop-shadow-sm" />
-          </div>
-          <div className="flex items-baseline gap-2 md:gap-2.5">
-            <span className="font-extrabold text-[#284117] tracking-tight text-lg md:text-[1.65rem]">Durian Map</span>
-            <span className="text-[10px] text-[#45631e] font-bold px-2.5 py-1 rounded-full border border-[#c8dd74] bg-[#eff7c8] hidden sm:inline-block shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">NO CHAINS</span>
-          </div>
+      <header className="absolute top-0 left-0 right-0 h-20 md:h-[5.5rem] bg-primary rounded-b-[24px] z-40 flex items-center gap-3 px-4 md:px-6">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface">
+          <Image src="/logo.png" alt="" width={44} height={44} priority className="w-9 h-9 object-contain" />
         </div>
-        <div className="flex items-center gap-1.5 md:gap-2">
-          <TabButton active={activeTab === 'search'} onClick={() => { setActiveTab('search'); setSheetState('half'); }}>
-            探す
-          </TabButton>
-          <TabButton active={activeTab === 'saved'} onClick={() => { setActiveTab('saved'); setSheetState('half'); }}>
-            保存
-            {savedCafes.length > 0 && (
-              <span className={`ml-1.5 text-[10px] px-1.5 py-px rounded-full font-bold ${activeTab === 'saved' ? 'bg-[#f7e8a0] text-[#567221]' : 'bg-[#efe5bb] text-[#71804b]'
-                }`}>
-                {savedCafes.length}
-              </span>
-            )}
-          </TabButton>
+        <div className="min-w-0">
+          <p className="font-display text-xl md:text-2xl font-bold text-white leading-tight">Durian Map</p>
+          <p className="text-xs text-surface/90 leading-tight mt-0.5">チェーンじゃない、あの一杯へ。</p>
         </div>
       </header>
 
       {/* ベース用コンテナ (PCはフレックス、モバイルは重ね合わせ) */}
-      <div className="flex-1 w-full flex md:flex-row mt-[4.25rem] md:mt-[5rem] overflow-hidden relative">
+      <div className="flex-1 w-full flex md:flex-row mt-[4.5rem] md:mt-[5.25rem] overflow-hidden relative">
 
         {/* マップ (モバイルでは背景、PCでは右側) */}
         <div
@@ -393,9 +396,13 @@ function CafeFinderContent() {
           />
 
           {selectedCafe && selectionSource === 'map' && (
-            <div className="pointer-events-none absolute inset-x-3 top-3 z-20 md:hidden">
+            <div className="pointer-events-none absolute inset-x-4 top-4 z-20 md:hidden">
               <div className="pointer-events-auto">
-                <MapSelectionCard cafe={selectedCafe} onClose={clearSelectedCafe} />
+                <MapSelectionCard
+                  cafe={selectedCafe}
+                  distance={getDistanceMeters(currentLocation, selectedCafe)}
+                  onClose={clearSelectedCafe}
+                />
               </div>
             </div>
           )}
@@ -403,52 +410,66 @@ function CafeFinderContent() {
 
         {/* リストパネル (PC: 左側固定, モバイル: ボトムシート) */}
         <div
-          className={`absolute inset-x-0 bottom-0 z-30 bg-[rgba(253,248,223,0.97)] shadow-[0_-18px_45px_rgba(71,98,29,0.18)] rounded-t-[2rem] border-t border-[#d9cc88] flex flex-col transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)]
-            md:static md:w-[440px] md:h-full md:rounded-none md:shadow-none md:border-r md:border-[#d6ca8c] md:bg-[rgba(252,247,221,0.92)] md:backdrop-blur-xl md:z-auto
+          className={`absolute inset-x-0 bottom-0 z-30 bg-surface shadow-card rounded-t-2xl border-t border-border flex flex-col transition-[height] duration-300 ease-out
+            md:static md:w-[440px] md:h-full md:rounded-none md:shadow-none md:border-t-0 md:border-l md:border-border
             ${sheetState === 'full' ? 'h-[85vh]' : 'h-[45vh]'}`}
         >
           {/* ドラッグハンドル (モバイル専用) */}
-          <div
-            className="w-full flex justify-center pt-3 pb-2 cursor-grab active:cursor-grabbing md:hidden"
+          <button
+            type="button"
+            aria-label={sheetState === 'half' ? 'リストを広げる' : 'リストを縮める'}
+            className="w-full flex justify-center items-center h-11 shrink-0 md:hidden"
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
             onClick={() => setSheetState(s => s === 'half' ? 'full' : 'half')}
           >
-            <div className="w-14 h-2 rounded-full bg-[linear-gradient(90deg,#567822_0%,#8fc63c_50%,#567822_100%)] shadow-[0_3px_10px_rgba(93,123,39,0.28)] pointer-events-none" />
-          </div>
+            <span className="w-12 h-1.5 rounded-full bg-border pointer-events-none" />
+          </button>
 
           <div className="flex-1 flex flex-col overflow-hidden px-4 md:px-5">
+            {/* タブ切り替え */}
+            <div className="shrink-0 flex gap-2 pt-2 pb-3 md:pt-5">
+              <TabButton active={activeTab === 'search'} onClick={() => { setActiveTab('search'); setSheetState('half'); }}>
+                さがす
+              </TabButton>
+              <TabButton active={activeTab === 'saved'} onClick={() => { setActiveTab('saved'); setSheetState('half'); }}>
+                保存
+                {savedCafes.length > 0 && (
+                  <span className="num ml-1.5">{savedCafes.length}</span>
+                )}
+              </TabButton>
+            </div>
+
             {/* 探すタブ: 検索フォーム */}
             {activeTab === 'search' && (
-              <div className="shrink-0 pt-2 pb-4 border-b border-[#e1d8aa] md:pt-5">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div>
-                    <p className="hidden md:block text-[11px] uppercase tracking-[0.22em] text-[#7f9452] font-extrabold">Creamy Search</p>
-                    <h2 className="text-base md:text-lg font-extrabold text-[#284117] mt-1">エリアから候補を探す</h2>
-                  </div>
-                  {currentLocation && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[#eef8c9] px-3 py-1 text-[11px] font-bold text-[#496820] border border-[#c7df70] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
-                      <span className="w-2 h-2 rounded-full bg-[#7cb930] shadow-[0_0_0_4px_rgba(183,218,82,0.25)]" />
-                      現在地を表示中
-                    </span>
-                  )}
-                </div>
+              <div className="shrink-0 pb-4 border-b border-border">
+                {/* 最重要 CTA: 1 画面 1 つ（docs/design.md 1節） */}
                 <button
                   onClick={handleLocate}
                   disabled={isLocating}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-[24px] border border-[#5f8128] bg-[linear-gradient(180deg,#a4d348_0%,#6d962a_100%)] text-[#fff9df] text-sm font-extrabold hover:brightness-[1.02] hover:translate-y-[1px] transition-all mb-3 disabled:opacity-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_14px_28px_rgba(93,123,39,0.24)]"
+                  className="w-full min-h-[56px] flex items-center gap-3 px-4 py-3 rounded-xl bg-cta text-text text-left transition-opacity disabled:opacity-50"
                 >
-                  {isLocating ? <><LoadingSpinner />現在地を取得中...</> : <><LocationIcon />現在地周辺で探す</>}
+                  <span className="shrink-0">
+                    {isLocating ? <LoadingSpinner /> : <TargetIcon />}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-base font-bold leading-tight">
+                      {isLocating ? '現在地を取得中...' : '現在地の周辺で探す'}
+                    </span>
+                    <span className="block text-xs leading-tight mt-0.5 opacity-80">GPSでいますぐ見つける</span>
+                  </span>
+                  <ChevronRightIcon />
                 </button>
-                <form onSubmit={handleSearch} className="flex gap-2">
+
+                <form onSubmit={handleSearch} className="flex gap-2 mt-3">
                   <input
                     type="text"
                     value={area}
                     onChange={(e) => setArea(e.target.value)}
                     list="popular-areas"
                     aria-label="検索したいエリア名"
-                    placeholder="例: 新宿、渋谷、鎌倉"
-                    className="flex-1 px-4 py-2.5 rounded-[22px] border border-[#d9cd88] bg-[#fff9df] text-sm text-[#284117] placeholder-[#8f956d] focus:outline-none focus:ring-2 focus:ring-[#b8d95c]/55 focus:border-[#8fc63c] focus:bg-[#fffdf2] transition-all shadow-[inset_0_2px_10px_rgba(115,132,51,0.06)]"
+                    placeholder="エリア名を入力（例：中目黒）"
+                    className="flex-1 min-w-0 h-12 px-4 rounded-xl border border-border bg-surface-sunken text-base text-text placeholder-text-muted focus:outline-none focus:border-primary"
                   />
                   <datalist id="popular-areas">
                     {popularAreas.map(a => <option key={a} value={a} />)}
@@ -456,30 +477,45 @@ function CafeFinderContent() {
                   <button
                     type="submit"
                     disabled={isLoading || !area}
-                    className="px-5 py-2.5 rounded-[22px] border border-[#b98c24] bg-[linear-gradient(180deg,#f6de69_0%,#ecbd42_100%)] text-[#42330f] text-sm font-extrabold hover:brightness-[1.02] transition-all disabled:opacity-40 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_12px_22px_rgba(215,173,55,0.22)]"
+                    aria-label="このエリアで検索"
+                    className="h-12 w-12 shrink-0 flex items-center justify-center rounded-xl bg-primary text-white transition-opacity disabled:opacity-40"
                   >
-                    検索
+                    <ArrowRightIcon />
                   </button>
                 </form>
-                <p className="mt-3 text-[11px] md:text-xs text-[#667931] leading-relaxed font-medium">
-                  {searchMode === 'nearby'
-                    ? `現在地から半径${(DEFAULT_NEARBY_RADIUS_METERS / 1000).toFixed(1)}km圏内を距離順で表示しています。`
-                    : 'ピンでも一覧でも選べます。一覧をタップすると詳細を大きく表示します。'}
+
+                {/* 押せるタグ = 実際にそのエリアを検索する（docs/design.md 1節） */}
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {quickAreas.map(a => (
+                    <button
+                      key={a}
+                      type="button"
+                      onClick={() => handleQuickArea(a)}
+                      className="min-h-11 px-4 rounded-full border border-border bg-surface text-sm font-medium text-text"
+                    >
+                      {a}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 保存タブ: タイトル */}
+            {activeTab === 'saved' && (
+              <div className="shrink-0 pb-4 border-b border-border">
+                <h2 className="text-2xl font-bold leading-[1.3] text-text">保存したカフェ</h2>
+                <p className="text-xs text-text-muted mt-1">
+                  <span className="num">{savedCafes.length}</span>軒をキープ中
                 </p>
               </div>
             )}
 
-            {/* お気に入りタブ: タイトル */}
-            {activeTab === 'saved' && (
-              <div className="shrink-0 py-4 md:pt-6 border-b border-[#e1d8aa]">
-                <h2 className="font-extrabold text-lg text-[#284117]">保存したカフェ</h2>
-              </div>
-            )}
-
             {selectedCafe && (
-              <div className={`shrink-0 py-3 md:py-4 border-b border-[#e1d8aa] ${selectionSource === 'map' ? 'hidden md:block' : 'block'}`}>
+              <div className={`shrink-0 py-4 border-b border-border ${selectionSource === 'map' ? 'hidden md:block' : 'block'}`}>
                 <SelectedCafePanel
                   cafe={selectedCafe}
+                  area={area}
+                  distance={getDistanceMeters(currentLocation, selectedCafe)}
                   isSaved={savedCafes.some((cafe) => cafe.id === selectedCafe.id)}
                   onToggleSave={() => toggleSave(selectedCafe)}
                   onClose={clearSelectedCafe}
@@ -488,12 +524,16 @@ function CafeFinderContent() {
             )}
 
             {/* カフェリスト (スクロール領域) */}
-            <div ref={listRef} className="flex-1 overflow-y-auto py-4 flex flex-col gap-3 scroll-smooth pb-10">
+            <div
+              ref={listRef}
+              className="flex-1 overflow-y-auto py-4 flex flex-col gap-3 scroll-smooth"
+              style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+            >
 
               {/* ローディング */}
               {isLoading && (
-                <div className="flex flex-col gap-3 animate-pulse">
-                  {[1, 2, 3].map(i => <div key={i} className="h-28 rounded-[24px] bg-[#f4edc8]" />)}
+                <div className="flex flex-col gap-3 animate-pulse" aria-hidden>
+                  {[1, 2, 3].map(i => <div key={i} className="h-24 rounded-2xl bg-surface-sunken shrink-0" />)}
                 </div>
               )}
 
@@ -501,22 +541,18 @@ function CafeFinderContent() {
               {!isLoading && currentCafes.length > 0 && (
                 <>
                   {activeTab === 'search' && (
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="inline-flex items-center gap-2 rounded-full border border-[#d1e37c] bg-[#eff7c9] px-3 py-1 text-xs font-extrabold text-[#526c22] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
-                        <span className="h-2 w-2 rounded-full bg-[#89bf34]" />
-                        {results.length}件見つかりました
-                      </p>
+                    <div className="flex items-baseline gap-2 shrink-0">
+                      <h2 className="text-lg font-bold leading-[1.4] text-text">{listHeading}</h2>
+                      <span className="num text-sm text-text-muted">{results.length}件</span>
                     </div>
                   )}
                   {currentCafes.map(cafe => (
                     <CafeCard
                       key={cafe.id}
                       cafe={cafe}
-                      area={area}
+                      distance={getDistanceMeters(currentLocation, cafe)}
                       isSelected={cafe.id === selectedId}
-                      isSaved={savedCafes.some(c => c.id === cafe.id)}
                       onSelect={() => handleCardSelect(cafe.id)}
-                      onToggleSave={() => toggleSave(cafe)}
                     />
                   ))}
                 </>
@@ -524,15 +560,30 @@ function CafeFinderContent() {
 
               {/* 空状態 */}
               {!isLoading && currentCafes.length === 0 && (activeTab === 'saved' || hasSearched) && (
-                <div className="flex flex-col items-center justify-center py-20 text-[#738448]">
-                  <div className="w-16 h-16 bg-[linear-gradient(180deg,#b8da52_0%,#88b834_100%)] rounded-[24px] flex items-center justify-center mb-4 text-3xl shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_14px_24px_rgba(87,118,33,0.2)] border border-[#6f922d]">
-                    ☕️
+                <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                  <div className="w-16 h-16 rounded-full bg-surface-sunken flex items-center justify-center mb-4 text-primary">
+                    <CupIcon className="w-8 h-8" />
                   </div>
-                  <p className="text-sm font-bold text-[#45631e]">
+                  <p className="text-base font-bold text-text">
                     {activeTab === 'saved' ? 'まだ保存したカフェはありません' : '見つかりませんでした'}
                   </p>
-                  <p className="text-xs text-[#7b8a52] mt-1">
-                    {activeTab === 'search' && '別のエリア名でお試しください。'}
+                  <p className="text-sm text-text-muted mt-2 leading-[1.6]">
+                    {activeTab === 'saved'
+                      ? '気になるカフェを選んで「保存」すると、ここに並びます。'
+                      : '別のエリア名でお試しください。'}
+                  </p>
+                </div>
+              )}
+
+              {/* 未検索の初期状態 */}
+              {!isLoading && activeTab === 'search' && !hasSearched && (
+                <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                  <div className="w-16 h-16 rounded-full bg-surface-sunken flex items-center justify-center mb-4 text-primary">
+                    <CupIcon className="w-8 h-8" />
+                  </div>
+                  <p className="text-base font-bold text-text">まずはエリアを決めましょう</p>
+                  <p className="text-sm text-text-muted mt-2 leading-[1.6]">
+                    現在地の周辺で探すか、エリア名を入力してください。
                   </p>
                 </div>
               )}
@@ -547,7 +598,7 @@ function CafeFinderContent() {
 // --- メインコンポーネントのラッパー ---
 export default function CafeFinder() {
   return (
-    <Suspense fallback={<div className="h-[100dvh] w-full bg-[#FAF8F5] flex items-center justify-center">Loading...</div>}>
+    <Suspense fallback={<div className="h-[100dvh] w-full bg-surface flex items-center justify-center text-sm text-text-muted">読み込み中...</div>}>
       <CafeFinderContent />
     </Suspense>
   );
@@ -556,143 +607,94 @@ export default function CafeFinder() {
 // --- カフェカードコンポーネント ---
 type CafeCardProps = {
   cafe: Cafe;
-  area: string;
+  distance: number | null;
   isSelected: boolean;
-  isSaved: boolean;
   onSelect: () => void;
-  onToggleSave: () => void;
 };
 
-function CafeCard({ cafe, area, isSelected, isSaved, onSelect, onToggleSave }: CafeCardProps) {
-  const mapUrl = getCafeMapUrl(cafe);
-  const domain = getCafeDomain(cafe);
+// カード全体がタップ領域。カード内に別のボタンは置かない（docs/design.md 5節）
+function CafeCard({ cafe, distance, isSelected, onSelect }: CafeCardProps) {
   const photoUrl = getCafePhotoUrl(cafe);
 
-  const handleShare = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const shareUrl = area
-      ? `${window.location.origin}/?area=${encodeURIComponent(area)}&cafeId=${cafe.id}`
-      : mapUrl;
-
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: cafe.name,
-          url: shareUrl
-        });
-      } catch { }
-    } else {
-      navigator.clipboard.writeText(shareUrl);
-      alert('URLをコピーしました！');
-    }
-  };
-
   return (
-    <div
+    <button
+      type="button"
       data-id={cafe.id}
       onClick={onSelect}
-      className={`rounded-[28px] md:rounded-[26px] px-3.5 py-3 md:p-4 flex gap-3 md:gap-4 cursor-pointer transition-all duration-300 group border relative overflow-hidden shrink-0 ${isSelected
-        ? 'border-[#8fc63c] shadow-[0_18px_34px_rgba(92,122,36,0.2)] ring-1 ring-[#cae474] bg-[#fff9db] -translate-y-0.5'
-        : 'bg-[rgba(255,251,234,0.98)] border-[#d9cd88] hover:border-[#a9cb47] hover:shadow-[0_14px_24px_rgba(93,123,39,0.12)] hover:-translate-y-0.5'
-        }`}
+      aria-pressed={isSelected}
+      className={`w-full text-left shrink-0 rounded-2xl border p-3 flex gap-3 items-start shadow-card ${isSelected ? 'border-primary bg-surface-sunken' : 'border-border bg-surface'}`}
     >
-      <div className="pointer-events-none absolute -left-4 top-8 h-16 w-16 rounded-full bg-[radial-gradient(circle,rgba(255,248,208,0.7),transparent_70%)]" />
-      <div className="pointer-events-none absolute right-2 top-2 h-7 w-7 bg-[linear-gradient(180deg,rgba(183,218,82,0.46),rgba(109,150,42,0.2))] opacity-90 [clip-path:polygon(50%_0%,66%_12%,86%_14%,100%_34%,88%_52%,100%_70%,86%_86%,66%_88%,50%_100%,34%_88%,14%_86%,0%_70%,12%_52%,0%_34%,14%_14%,34%_12%)]" />
-      {/* 選択時のインジケーターライン */}
-      <div className={`absolute left-0 top-0 bottom-0 w-1.5 transition-colors duration-300 ${isSelected ? 'bg-[#89bf34]' : 'bg-transparent'}`} />
-
-      {/* アイコン/写真部分 */}
-      <div className={`relative w-14 h-14 md:w-16 md:h-16 shrink-0 rounded-[20px] md:rounded-[22px] flex items-center justify-center text-2xl shadow-[inset_0_2px_12px_rgba(108,136,41,0.12)] border overflow-hidden ${isSelected ? 'bg-[#eef7c4] border-[#b8d95c]' : 'bg-[#f8f1c7] border-[#dfd38e]'}`}>
+      {/* サムネイル 64x64 / 角丸 12px */}
+      <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-surface-sunken flex items-center justify-center text-text-muted">
         {photoUrl ? (
-          <Image src={photoUrl} alt={cafe.name} width={64} height={64} unoptimized className="w-full h-full object-cover" />
+          <Image src={photoUrl} alt="" width={64} height={64} unoptimized className="w-full h-full object-cover" />
         ) : (
-          <span>☕️</span>
+          <CupIcon className="w-7 h-7" />
         )}
-        <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-[#fff4c6] bg-[linear-gradient(180deg,#ffe88d_0%,#efc94d_100%)] shadow-[0_4px_10px_rgba(214,181,70,0.26)]">
-          <span className="block h-2 w-2 rounded-full bg-[#5a7d22]" />
-        </div>
       </div>
 
-      <div className="flex-1 min-w-0 flex flex-col justify-center">
-        <div className="flex items-start justify-between gap-2 mb-1">
-          <div>
-            <div className="mb-1 flex items-center gap-1.5 md:hidden">
-              <span className={`inline-flex items-center rounded-full px-2 py-[3px] text-[10px] font-extrabold ${isSelected ? 'bg-[#e4f3ba] text-[#537320]' : 'bg-[#fff4c9] text-[#7b7f41]'}`}>
-                {isSelected ? '本命' : 'きになる'}
-              </span>
-            </div>
-            <h3 className="font-extrabold text-[#284117] text-[13px] md:text-sm line-clamp-2 md:line-clamp-1 leading-[1.22] pr-1">{cafe.name}</h3>
-            {/* 評価と営業時間バッジ */}
-            <div className="flex items-center gap-1.5 md:gap-2 mt-1 flex-wrap">
-              {cafe.rating && (
-                <div className="flex items-center gap-1 rounded-full bg-[#fff4cb] px-2 py-[3px] text-[11px] font-extrabold text-[#d08f18]">
-                  <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
-                  {cafe.rating.toFixed(1)} <span className="text-[10px] text-[#8b9369] font-medium">({cafe.userRatingCount})</span>
-                </div>
-              )}
-              {cafe.openNow !== undefined && (
-                <span className={`text-[10px] px-2 py-[5px] rounded-full font-extrabold ${cafe.openNow ? 'bg-[#dff5b5] text-[#45631e]' : 'bg-[#f1ebc9] text-[#7e845d]'}`}>
-                  {cafe.openNow ? '営業中' : '営業時間外'}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* ボタン群 (シェア・保存) */}
-          <div className="flex items-center -mt-1 -mr-1 shrink-0">
-            <button
-              onClick={handleShare}
-              aria-label="シェアする"
-              className="hidden md:flex p-2 rounded-2xl text-[#94a168] hover:text-[#496820] hover:bg-[#eef8c9] transition-all lg:opacity-0 lg:group-hover:opacity-100"
-            >
-              <ShareIcon />
-            </button>
-            <button
-              onClick={e => { e.stopPropagation(); onToggleSave(); }}
-              aria-label={isSaved ? '保存を解除' : '保存する'}
-              className={`p-2 rounded-full border transition-all ${isSaved
-                ? 'border-[#f7d2bb] bg-[#fff0da] text-[#df6a45]'
-                : 'border-[#e3d79a] bg-[#fff8df] text-[#94a168] hover:text-[#df6a45] hover:bg-[#fff7dd]'
-                }`}
-            >
-              <HeartIcon filled={isSaved} />
-            </button>
-          </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start gap-2">
+          <h3 className="flex-1 min-w-0 text-base font-bold leading-[1.4] text-text line-clamp-2">{cafe.name}</h3>
+          <OpenStatusBadge openNow={cafe.openNow} />
         </div>
 
-        <div className="mt-auto flex flex-col gap-1">
-          <a
-            href={mapUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={e => e.stopPropagation()}
-            className="hidden md:flex items-center gap-1 text-[11px] text-[#667931] hover:text-[#2e4718] transition-colors w-fit"
-          >
-            <LocationIcon className="w-3.5 h-3.5 shrink-0 text-[#8eb147]" />
-            <span className="truncate hover:underline max-w-[200px]">{cafe.address}</span>
-          </a>
-
-          {domain && (
-            <a
-              href={cafe.websiteUri}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={e => e.stopPropagation()}
-              className="inline-flex items-center gap-1 text-[11px] text-[#6b8726] hover:text-[#31491b] transition-colors w-fit"
-            >
-              <LinkIcon />
-              <span className="hover:underline line-clamp-1">{domain}</span>
-            </a>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 text-xs text-text-muted">
+          {cafe.rating != null && (
+            <span className="inline-flex items-center gap-1">
+              <StarIcon className="w-3.5 h-3.5 text-star" />
+              <span className="num text-sm font-bold text-text">{cafe.rating.toFixed(1)}</span>
+              {cafe.userRatingCount != null && (
+                <span className="num">({cafe.userRatingCount})</span>
+              )}
+            </span>
           )}
-          <p className="md:hidden text-[11px] text-[#7d8756] line-clamp-1 pr-6">{cafe.address}</p>
+          {distance != null && (
+            <>
+              {cafe.rating != null && <span aria-hidden>・</span>}
+              <span className="num">{formatDistance(distance)}</span>
+            </>
+          )}
         </div>
+
+        <p className="text-sm leading-[1.6] text-text-muted mt-1 line-clamp-1">{cafe.address}</p>
       </div>
-    </div>
+    </button>
   );
 }
 
-function SelectedCafePanel({ cafe, isSaved, onToggleSave, onClose }: {
+// 状態バッジ: 枠線・影・ホバーなし（docs/design.md 5節）
+function OpenStatusBadge({ openNow }: { openNow?: boolean }) {
+  if (openNow === undefined) {
+    return null;
+  }
+
+  return (
+    <span
+      className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium leading-none ${openNow ? 'bg-success-soft text-success-text' : 'bg-accent-soft text-accent-text'}`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${openNow ? 'bg-success' : 'bg-accent'}`} />
+      {openNow ? '営業中' : '準備中'}
+    </span>
+  );
+}
+
+function RatingStars({ rating }: { rating: number }) {
+  const filled = Math.round(rating);
+
+  return (
+    <span className="inline-flex items-center gap-0.5" aria-hidden>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <StarIcon key={i} className={`w-4 h-4 ${i <= filled ? 'text-star' : 'text-border'}`} />
+      ))}
+    </span>
+  );
+}
+
+function SelectedCafePanel({ cafe, area, distance, isSaved, onToggleSave, onClose }: {
   cafe: Cafe;
+  area: string;
+  distance: number | null;
   isSaved: boolean;
   onToggleSave: () => void;
   onClose: () => void;
@@ -700,110 +702,113 @@ function SelectedCafePanel({ cafe, isSaved, onToggleSave, onClose }: {
   const mapUrl = getCafeMapUrl(cafe);
   const domain = getCafeDomain(cafe);
   const photoUrl = getCafePhotoUrl(cafe);
+  const categoryLabel = getCategoryLabel(cafe.category);
 
   const handleShare = async () => {
+    const shareUrl = getCafeShareUrl(cafe, area);
+
     if (navigator.share) {
       try {
         await navigator.share({
           title: cafe.name,
-          url: mapUrl,
+          url: shareUrl,
         });
       } catch { }
       return;
     }
 
-    await navigator.clipboard.writeText(mapUrl);
-    alert('マップURLをコピーしました！');
+    await navigator.clipboard.writeText(shareUrl);
+    alert('URLをコピーしました！');
   };
 
   return (
-    <section className="relative rounded-[28px] md:rounded-[30px] bg-[linear-gradient(180deg,#678f28_0%,#3b571a_100%)] text-[#fff9df] p-4 md:p-4 shadow-[0_24px_44px_rgba(70,99,28,0.28)] overflow-hidden border border-[#87b53a]">
-      <div className="pointer-events-none absolute right-[-1.8rem] top-[-1.8rem] h-24 w-24 rounded-full bg-[radial-gradient(circle,rgba(246,222,105,0.62),rgba(183,218,82,0.18)_55%,transparent_72%)]" />
-      <div className="pointer-events-none absolute left-6 top-0 h-8 w-24 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.18),transparent)]" />
-      <div className="pointer-events-none absolute bottom-3 right-4 h-10 w-10 bg-[linear-gradient(180deg,rgba(255,243,186,0.18),rgba(255,243,186,0.02))] [clip-path:polygon(50%_0%,65%_12%,84%_16%,100%_36%,87%_54%,100%_73%,84%_87%,65%_89%,50%_100%,35%_89%,16%_87%,0%_73%,13%_54%,0%_36%,16%_16%,35%_12%)]" />
-      <div className="flex items-start gap-3 md:gap-4">
-        <div className="relative w-20 h-20 md:w-24 md:h-24 shrink-0 rounded-[22px] md:rounded-3xl overflow-hidden border border-[#cde373]/60 bg-[#243515] shadow-[inset_0_2px_12px_rgba(0,0,0,0.18)]">
-          {photoUrl ? (
-            <Image src={photoUrl} alt={cafe.name} width={96} height={96} unoptimized className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-4xl">☕️</div>
-          )}
+    <section className="rounded-2xl border border-border bg-surface shadow-card overflow-hidden">
+      {photoUrl && (
+        <div className="relative h-32 w-full bg-surface-sunken">
+          <Image src={photoUrl} alt="" width={400} height={160} unoptimized className="h-full w-full object-cover" />
         </div>
+      )}
 
-        <div className="flex-1 min-w-0">
-          <div className="mb-1.5 flex items-center gap-2">
-            <span className="inline-flex items-center rounded-full bg-[#fff3b8] px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#4d6b22]">
-              Durian Pick
-            </span>
-            <span className="inline-flex items-center rounded-full bg-white/12 px-2.5 py-1 text-[10px] font-bold text-[#eff7c9]">
-              いま気になる
-            </span>
-          </div>
-          <h2 className="mt-1 text-lg md:text-xl font-extrabold leading-tight text-[#fffbe8]">{cafe.name}</h2>
-
-          <div className="flex flex-wrap items-center gap-2 mt-2.5 md:mt-3">
-            {cafe.rating && (
-              <div className="flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-sm font-extrabold text-[#f7dc73]">
-                <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
-                {cafe.rating.toFixed(1)}
-                <span className="text-xs text-[#d6dfb6] font-medium">({cafe.userRatingCount})</span>
-              </div>
-            )}
-            {cafe.openNow !== undefined && (
-              <span className={`text-[11px] px-2 py-1 rounded-full font-extrabold ${cafe.openNow ? 'bg-[#dff5b5] text-[#45631e]' : 'bg-white/10 text-[#edf2d9]'}`}>
-                {cafe.openNow ? '営業中' : '営業時間外'}
-              </span>
+      <div className="p-4">
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-2">
+              <h2 className="flex-1 min-w-0 text-lg font-bold leading-[1.4] text-text">{cafe.name}</h2>
+              <OpenStatusBadge openNow={cafe.openNow} />
+            </div>
+            {(categoryLabel || distance != null) && (
+              <p className="mt-1 text-sm leading-[1.6] text-text-muted">
+                {categoryLabel}
+                {categoryLabel && distance != null && <span aria-hidden>　・　</span>}
+                {distance != null && <span className="num">現在地から{formatDistance(distance)}</span>}
+              </p>
             )}
           </div>
-        </div>
-
-        <div className="flex flex-col gap-2 shrink-0">
           <button
+            type="button"
             onClick={onClose}
             aria-label="選択を解除"
-            className="p-2 md:p-2.5 rounded-2xl bg-[#f8efbd]/12 text-[#fffbe8] hover:bg-[#f8efbd]/18 transition-colors border border-white/10"
+            className="h-11 w-11 -mr-2 -mt-2 shrink-0 flex items-center justify-center rounded-full text-text-muted"
           >
             <CloseIcon />
           </button>
-          <button
-            onClick={handleShare}
-            aria-label="シェアする"
-            className="p-2 md:p-2.5 rounded-2xl bg-[#f8efbd]/12 text-[#fffbe8] hover:bg-[#f8efbd]/18 transition-colors border border-white/10"
-          >
-            <ShareIcon />
-          </button>
-          <button
-            onClick={onToggleSave}
-            aria-label={isSaved ? '保存を解除' : '保存する'}
-            className={`p-2 md:p-2.5 rounded-2xl transition-colors border border-white/10 ${isSaved ? 'bg-[#fff0da]/18 text-[#ffd29e]' : 'bg-[#f8efbd]/12 text-[#fffbe8] hover:bg-[#f8efbd]/18'}`}
-          >
-            <HeartIcon filled={isSaved} />
-          </button>
         </div>
-      </div>
 
-      <div className="mt-3 md:mt-4 flex flex-col gap-3">
-        <div className="flex items-start gap-2 rounded-[22px] bg-white/8 px-3 py-2.5 text-sm text-[#edf2d9]">
-          <LocationIcon className="w-4 h-4 shrink-0 mt-0.5 text-[#f7dc73]" />
+        {cafe.rating != null && (
+          <div className="mt-3 flex items-center gap-2">
+            <span className="num text-2xl font-bold leading-none text-text">{cafe.rating.toFixed(1)}</span>
+            <RatingStars rating={cafe.rating} />
+            {cafe.userRatingCount != null && (
+              <span className="text-xs text-text-muted">
+                <span className="num">{cafe.userRatingCount}</span>件のクチコミ
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* アクション行（アイコン + ラベルの縦積みはここだけ / docs/design.md 5節） */}
+        <div className="mt-4 grid grid-cols-3 gap-2">
           <a
             href={mapUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="leading-relaxed hover:text-white transition-colors line-clamp-2"
+            className="min-h-[56px] flex flex-col items-center justify-center gap-1 rounded-xl bg-primary text-white text-xs font-bold"
           >
-            {cafe.address}
-          </a>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <a
-            href={mapUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(180deg,#f7dc73_0%,#ebb940_100%)] px-4 py-2.5 text-sm font-extrabold text-[#42330f] hover:brightness-[1.03] transition-colors border border-[#b98c24] shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]"
-          >
-            <LocationIcon className="w-4 h-4" />
+            <LocationIcon className="w-5 h-5" />
             地図でみる
+          </a>
+          <button
+            type="button"
+            onClick={onToggleSave}
+            aria-pressed={isSaved}
+            className={`min-h-[56px] flex flex-col items-center justify-center gap-1 rounded-xl border text-xs font-bold ${isSaved ? 'border-accent bg-accent-soft text-accent-text' : 'border-border bg-surface text-text'}`}
+          >
+            <BookmarkIcon filled={isSaved} />
+            {isSaved ? '保存済み' : '保存'}
+          </button>
+          <button
+            type="button"
+            onClick={handleShare}
+            className="min-h-[56px] flex flex-col items-center justify-center gap-1 rounded-xl border border-border bg-surface text-xs font-bold text-text"
+          >
+            <ShareIcon className="w-5 h-5" />
+            シェア
+          </button>
+        </div>
+
+        <div className="mt-4 border-t border-border">
+          <a
+            href={mapUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-start gap-3 py-3 min-h-11 border-b border-border"
+          >
+            <LocationIcon className="w-5 h-5 shrink-0 mt-0.5 text-primary" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs text-text-muted">住所</span>
+              <span className="block text-sm leading-[1.6] text-text">{cafe.address}</span>
+            </span>
+            <ChevronRightIcon className="w-4 h-4 shrink-0 mt-1 text-text-muted" />
           </a>
 
           {domain && cafe.websiteUri && (
@@ -811,10 +816,14 @@ function SelectedCafePanel({ cafe, isSaved, onToggleSave, onClose }: {
               href={cafe.websiteUri}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full border border-[#b6d55d] bg-white/8 px-4 py-2.5 text-sm font-bold text-[#eff7c9] hover:bg-white/12 transition-colors"
+              className="flex items-start gap-3 py-3 min-h-11"
             >
-              <LinkIcon />
-              {domain}
+              <LinkIcon className="w-5 h-5 shrink-0 mt-0.5 text-primary" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs text-text-muted">ウェブサイト</span>
+                <span className="block text-sm leading-[1.6] text-text truncate">{domain}</span>
+              </span>
+              <ChevronRightIcon className="w-4 h-4 shrink-0 mt-1 text-text-muted" />
             </a>
           )}
         </div>
@@ -823,77 +832,51 @@ function SelectedCafePanel({ cafe, isSaved, onToggleSave, onClose }: {
   );
 }
 
-function MapSelectionCard({ cafe, onClose }: { cafe: Cafe; onClose: () => void }) {
-  const mapUrl = getCafeMapUrl(cafe);
-  const domain = getCafeDomain(cafe);
+function MapSelectionCard({ cafe, distance, onClose }: { cafe: Cafe; distance: number | null; onClose: () => void }) {
   const photoUrl = getCafePhotoUrl(cafe);
 
   return (
-    <section className="rounded-[24px] bg-[rgba(255,251,234,0.96)] p-3 shadow-[0_18px_36px_rgba(83,110,29,0.2)] border border-[#d9cd88] backdrop-blur-sm">
+    <section className="rounded-2xl border border-border bg-surface p-3 shadow-card">
       <div className="flex items-start gap-3">
-        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-[20px] bg-[#f8f1c7] border border-[#d7cb88]">
+        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-surface-sunken flex items-center justify-center text-text-muted">
           {photoUrl ? (
-            <Image src={photoUrl} alt={cafe.name} width={56} height={56} unoptimized className="h-full w-full object-cover" />
+            <Image src={photoUrl} alt="" width={64} height={64} unoptimized className="h-full w-full object-cover" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-xl">☕️</div>
+            <CupIcon className="w-7 h-7" />
           )}
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="mb-1">
-                <span className="inline-flex items-center rounded-full bg-[#eef7c8] px-2 py-[3px] text-[10px] font-extrabold text-[#54711f]">
-                  Pin Pick
-                </span>
-              </div>
-              <h3 className="mt-1 text-sm font-extrabold text-[#284117] line-clamp-1">{cafe.name}</h3>
-            </div>
+            <h3 className="flex-1 min-w-0 text-base font-bold leading-[1.4] text-text line-clamp-1">{cafe.name}</h3>
+            <OpenStatusBadge openNow={cafe.openNow} />
             <button
+              type="button"
               onClick={onClose}
               aria-label="選択を解除"
-              className="rounded-2xl p-2 text-[#7f9154] hover:bg-[#eef8c9] hover:text-[#496820] transition-colors"
+              className="h-11 w-11 -mr-2 -mt-2 shrink-0 flex items-center justify-center rounded-full text-text-muted"
             >
               <CloseIcon />
             </button>
           </div>
 
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            {cafe.rating && (
-              <span className="inline-flex items-center gap-1 text-xs font-extrabold text-[#d08f18]">
-                <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
-                {cafe.rating.toFixed(1)}
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
+            {cafe.rating != null && (
+              <span className="inline-flex items-center gap-1">
+                <StarIcon className="w-3.5 h-3.5 text-star" />
+                <span className="num text-sm font-bold text-text">{cafe.rating.toFixed(1)}</span>
+                {cafe.userRatingCount != null && <span className="num">({cafe.userRatingCount})</span>}
               </span>
             )}
-            {cafe.openNow !== undefined && (
-              <span className={`rounded-full px-2 py-1 text-[10px] font-extrabold ${cafe.openNow ? 'bg-[#dff5b5] text-[#45631e]' : 'bg-[#f1ebc9] text-[#7e845d]'}`}>
-                {cafe.openNow ? '営業中' : '営業時間外'}
-              </span>
+            {distance != null && (
+              <>
+                {cafe.rating != null && <span aria-hidden>・</span>}
+                <span className="num">{formatDistance(distance)}</span>
+              </>
             )}
           </div>
 
-          <div className="mt-2 flex flex-wrap gap-2">
-            <a
-              href={mapUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(180deg,#9cd145_0%,#6a9329_100%)] px-3 py-2 text-xs font-extrabold text-[#fff9df] hover:brightness-[1.03] transition-colors border border-[#628629] shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]"
-            >
-              <LocationIcon className="w-3.5 h-3.5" />
-              みにいく
-            </a>
-            {domain && cafe.websiteUri && (
-              <a
-                href={cafe.websiteUri}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[#d7cb88] bg-[#fff8dc] px-3 py-2 text-xs font-bold text-[#5f7726] hover:bg-[#fffbee] transition-colors"
-              >
-                <LinkIcon />
-                <span className="truncate max-w-32">{domain}</span>
-              </a>
-            )}
-          </div>
+          <p className="mt-1 text-sm leading-[1.6] text-text-muted line-clamp-1">{cafe.address}</p>
         </div>
       </div>
     </section>
@@ -904,10 +887,12 @@ function MapSelectionCard({ cafe, onClose }: { cafe: Cafe; onClose: () => void }
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={`flex items-center px-4 md:px-5 py-1.5 md:py-2 rounded-full text-sm font-extrabold border transition-all ${active
-        ? 'border-[#5e8128] bg-[linear-gradient(180deg,#98cf42_0%,#678f28_100%)] text-[#fff9df] shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_12px_20px_rgba(93,123,39,0.22)]'
-        : 'border-[#d7cb88] bg-[#fff8db] text-[#61772b] hover:text-[#284117] hover:bg-[#fffdf0] shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]'
+      aria-pressed={active}
+      className={`min-h-11 inline-flex items-center px-5 rounded-full text-sm font-bold border ${active
+        ? 'border-primary bg-primary text-white'
+        : 'border-border bg-surface text-text'
         }`}
     >
       {children}
@@ -917,7 +902,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 
 function LoadingSpinner() {
   return (
-    <svg className="w-4 h-4 animate-spin -ml-1 mr-1" fill="none" viewBox="0 0 24 24">
+    <svg className="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden>
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
     </svg>
@@ -926,32 +911,60 @@ function LoadingSpinner() {
 
 function LocationIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z" />
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
   );
 }
 
-function LinkIcon() {
+function TargetIcon() {
   return (
-    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="7" strokeWidth={2} />
+      <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
+      <path strokeLinecap="round" strokeWidth={2} d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+    </svg>
+  );
+}
+
+function CupIcon({ className = "w-6 h-6" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h12v6a5 5 0 01-5 5H9a5 5 0 01-5-5V8z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 9h2.5a2.5 2.5 0 010 5H16" />
+      <path strokeLinecap="round" strokeWidth={2} d="M8 2.5v2M12 2.5v2" />
+    </svg>
+  );
+}
+
+function StarIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+    </svg>
+  );
+}
+
+function LinkIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
     </svg>
   );
 }
 
-function HeartIcon({ filled }: { filled: boolean }) {
+function BookmarkIcon({ filled }: { filled: boolean }) {
   return (
-    <svg className="w-5 h-5" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+    <svg className="w-5 h-5" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 4.5A1.5 1.5 0 016.5 3h11A1.5 1.5 0 0119 4.5V21l-7-4-7 4V4.5z" />
     </svg>
   );
 }
 
-function ShareIcon() {
+function ShareIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
     </svg>
   );
@@ -959,8 +972,33 @@ function ShareIcon() {
 
 function CloseIcon() {
   return (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+function ArrowRightIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+function AlertIcon() {
+  return (
+    <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="9" strokeWidth={2} />
+      <path strokeLinecap="round" strokeWidth={2} d="M12 7.5v5M12 16h.01" />
     </svg>
   );
 }

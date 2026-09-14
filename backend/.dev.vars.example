@@ -1,0 +1,3 @@
+# ローカル開発用。`.dev.vars` にコピーして値を入れる（.dev.vars はコミットしない）
+# 本番は `wrangler secret put GOOGLE_API_KEY` で設定する
+GOOGLE_API_KEY=

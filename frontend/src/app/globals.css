@@ -20,6 +20,7 @@
   /* トロピカルアクセント */
   --tropic-mango-500: #f6a21b;
   --tropic-mango-700: #d97706;
+  --tropic-hibiscus-700: #b3164f;
   --tropic-hibiscus-500: #e2467c;
   --tropic-hibiscus-100: #fce1ea;
   --tropic-lagoon-500: #2bb3b1;
@@ -38,58 +39,62 @@
   --dm-text: var(--durian-seed-900);
   --dm-text-muted: var(--durian-seed-600);
 
-  /* 旧トークン（既存クラスの互換用。新規実装では上のトークンを使う） */
-  --durian-cream: var(--durian-cream-50);
-  --durian-cream-deep: var(--durian-cream-200);
-  --durian-shell: var(--durian-lime-400);
-  --durian-shell-deep: var(--durian-green-700);
-  --durian-lime: var(--durian-lime-400);
-  --durian-gold: var(--tropic-sun-500);
-  --durian-seed: var(--durian-seed-900);
-  --durian-shadow: rgba(20, 83, 45, 0.18);
+  /* 淡色地に文字を載せるとき用の濃色。4.5:1 を満たす（docs/design.md 3節） */
+  --dm-success-text: var(--durian-green-700);
+  --dm-accent-text: var(--tropic-hibiscus-700);
+
+  /* 影は 1 種類だけ（docs/design.md 4節） */
+  --dm-shadow: 0 2px 8px rgba(20, 83, 45, 0.08);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
   --color-primary: var(--dm-primary);
+  --color-primary-deep: var(--durian-green-900);
+  --color-primary-soft: var(--durian-green-500);
   --color-cta: var(--dm-cta);
+  --color-cta-deep: var(--tropic-mango-700);
   --color-accent: var(--dm-accent);
+  --color-accent-soft: var(--tropic-hibiscus-100);
   --color-info: var(--dm-info);
+  --color-info-soft: var(--tropic-lagoon-100);
   --color-success: var(--dm-success);
+  --color-success-soft: var(--durian-lime-100);
+  --color-success-text: var(--dm-success-text);
+  --color-accent-text: var(--dm-accent-text);
+  --color-star: var(--tropic-sun-500);
   --color-error: var(--dm-error);
   --color-surface: var(--dm-surface);
+  --color-surface-sunken: var(--durian-cream-100);
   --color-border: var(--dm-border);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-text: var(--dm-text);
+  --color-text-muted: var(--dm-text-muted);
+  --color-lime: var(--durian-lime-400);
+
+  /* 日本語は M PLUS Rounded 1c、欧文・数値は Co Headline（docs/design.md 2節） */
+  --font-sans: var(--font-sans), sans-serif;
+  --font-display: var(--font-display), var(--font-sans), sans-serif;
+
+  --shadow-card: var(--dm-shadow);
 }
 
 body {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(183, 218, 82, 0.42), transparent 28%),
-    radial-gradient(circle at 82% 12%, rgba(237, 197, 72, 0.28), transparent 24%),
-    radial-gradient(circle at 25% 78%, rgba(137, 191, 52, 0.18), transparent 18%),
-    linear-gradient(180deg, #f8efbd 0%, #f3e4a8 52%, #efe4a6 100%);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), sans-serif;
+  /* グラデーション禁止（docs/design.md 1節）。ベタ塗りのみ。 */
+  background-color: var(--dm-surface);
+  color: var(--dm-text);
+  font-family: var(--font-sans), sans-serif;
 }
 
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.4;
-  background-image:
-    radial-gradient(circle at 20% 20%, rgba(69, 99, 30, 0.07) 0 2px, transparent 2px),
-    radial-gradient(circle at 80% 35%, rgba(69, 99, 30, 0.05) 0 1.5px, transparent 1.5px),
-    radial-gradient(circle at 45% 80%, rgba(255, 255, 255, 0.2) 0 2.5px, transparent 2.5px);
-  background-size: 160px 160px, 220px 220px, 280px 280px;
-  mix-blend-mode: multiply;
+/* 数値・英字は Co Headline に揃える（評価・件数・距離など） */
+.num {
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+  font-feature-settings: "tnum" 1;
 }
 
 ::selection {
-  background: rgba(183, 218, 82, 0.45);
-  color: #1f3218;
+  background: var(--durian-lime-100);
+  color: var(--durian-seed-900);
 }
