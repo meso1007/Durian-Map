@@ -76,3 +76,15 @@
   | `#B3164F` on `#FCE1EA`（accent-text on hibiscus-100） | 5.44 | ✓ |
 - 濃緑面（ヘッダー・主ボタン）の文字は `#FFFFFF` または `--durian-cream-50`。
 - **グラデーションは使わない。すべてベタ塗り。** 詳細は `docs/design.md`。
+
+## タイポグラフィ
+
+| 役割 | フォント | ウェイト | CSS |
+|---|---|---|---|
+| ディスプレイ（ロゴ「Durian Map」、英字ラベル、評価・距離・件数などの数値） | **Co Headline**（Dalton Maag） | Light 300 / Regular 400 / Bold 700 | `font-display`（`--font-display`） |
+| 本文・日本語見出し | M PLUS Rounded 1c | 400 / 500 / 700 / 800 | `font-sans`（既定） |
+
+- Co Headline は欧文のみ（ひらがな・漢字を含まない）。`--font-display` は M PLUS Rounded 1c にフォールバックするので、日英混在テキストにそのまま指定してよい。
+- ファイルは `frontend/src/app/fonts/CoHeadline-*.woff2`（各約 80KB）。`next/font/local` で読み込み、CSS 変数 `--font-display` として公開している（`layout.tsx`）。
+- アイコン類やマーカー、ロゴ画像を作り直す際も、文字を含む場合は Co Headline Bold を使う。
+- ライセンス: Co Headline は商用フォント。Web 配信（webfont）と配布物（アプリアイコン等）の両方をカバーするライセンスを取得していることを確認してから本番デプロイする。
