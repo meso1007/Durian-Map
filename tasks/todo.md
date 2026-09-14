@@ -344,3 +344,25 @@ UI が 549 行書き換わっても iOS 対応の再適用は `page.tsx` の 10 
 **気をつける点**: ブランド素材が複数変種を持つようになったので、
 「どの面にどの変種か」を `docs/design-tokens.md` に書き、生成スクリプトも
 それに従わせた。次にロゴが変わっても `bun run ios:assets` 一発で追従する。
+
+---
+
+## 2026-09-15: 総合レビュー → P0 実装 → デプロイ → デザインモック
+
+レポート: `docs/review-2026-09-15.md`（§5 が実装スコープの正）。
+
+### 計画
+- [x] 現状把握（main / GaloisExtension/iOS / 本番 Worker・Pages / 料金一次情報）
+- [x] サブエージェントでバックエンド security review・フロント react review・料金調査
+- [x] `GaloisExtension/iOS` を `feat/review-2026-09-15` に統合（CLAUDE.md は main 構造 + iOS 記述）
+- [x] レポート執筆 `docs/review-2026-09-15.md` + コスト試算 `tasks/cost_model.py`
+- [ ] P0 バックエンド実装（Opus サブエージェント / 別ワークツリー）
+- [ ] P0 フロントエンド実装（Opus サブエージェント / 別ワークツリー）
+- [ ] 両ワークツリーをマージし `typecheck` / `test` / `lint` / `build:prod` を通す
+- [ ] Worker デプロイ（`PHOTO_SIGNING_KEY` secret 設定 → `/health` で確認）
+- [ ] Pages デプロイ → 本番で検索・写真・CORS・レート制限を確認
+- [ ] `.pen` デザインモック（iOS 版 / Web 版）を生成し PNG を確認
+- [ ] ToDo.md / tasks/lessons.md / README を更新して PR
+
+### レビュー
+（完了時に記入）
