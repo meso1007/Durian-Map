@@ -3,7 +3,12 @@ import type { Env, Place } from './types';
 const TEXT_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText';
 const NEARBY_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchNearby';
 
-/** 取得するフィールド。増やすと Places の課金ティアが上がるので安易に足さないこと。 */
+/**
+ * 取得するフィールド。増やすと Places の課金ティアが上がるので安易に足さないこと。
+ *
+ * `regularOpeningHours` は periods / weekdayDescriptions / openNow を**まとめて 1 つの
+ * フィールド**として数えるので、periods を受け取っても課金は変わらない。
+ */
 const FIELD_MASK = [
     'places.id',
     'places.displayName',
@@ -22,16 +27,67 @@ const FIELD_MASK = [
 /** 上流 API が遅いときに Worker の実行時間を食い潰さないための上限。 */
 const UPSTREAM_TIMEOUT_MS = 8000;
 
+/** クライアントに返す HTTP ステータス。`as 500` のような握り潰しを避けるため列挙する。 */
+export type PlacesErrorStatus = 404 | 429 | 500 | 502 | 504;
+
 /** 上流 API 由来のエラー。HTTP ステータスをそのまま伝播させるために使う。 */
 export class PlacesApiError extends Error {
     constructor(
         message: string,
-        readonly status: number,
+        readonly status: PlacesErrorStatus,
         readonly upstreamStatus?: number,
     ) {
         super(message);
         this.name = 'PlacesApiError';
     }
+}
+
+/** 上流のステータスをクライアントに返すステータスへ写す。 */
+function toClientStatus(upstreamStatus: number): PlacesErrorStatus {
+    // 認証・課金の失敗はこちらの設定ミス。
+    if (upstreamStatus === 401 || upstreamStatus === 403) return 500;
+    // 429 は潰さずそのまま返す。潰すとフロントがバックオフできない。
+    if (upstreamStatus === 429) return 429;
+    if (upstreamStatus === 404) return 404;
+    return 502;
+}
+
+/**
+ * Places API を呼ぶ共通処理。タイムアウトとエラー変換をここに集約する。
+ *
+ * エンドポイントごとに fetch をコピペしていたので、3 つ目を足すと 3 重化していた。
+ */
+export async function callPlacesApi(
+    url: string | URL,
+    init: RequestInit,
+    label: string,
+): Promise<Response> {
+    let response: Response;
+    try {
+        response = await fetch(url, { ...init, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
+    } catch (error) {
+        const timedOut = error instanceof Error && error.name === 'TimeoutError';
+        throw new PlacesApiError(
+            timedOut ? `${label} timed out` : `Failed to reach ${label}`,
+            504,
+        );
+    }
+
+    if (!response.ok) {
+        const detail = await response.text().catch(() => '');
+        console.error('places_api_error', {
+            label,
+            status: response.status,
+            detail: detail.slice(0, 500),
+        });
+        throw new PlacesApiError(
+            `${label} returned an error`,
+            toClientStatus(response.status),
+            response.status,
+        );
+    }
+
+    return response;
 }
 
 /**
@@ -83,9 +139,9 @@ export async function searchPlaces(env: Env, args: SearchArgs): Promise<Place[]>
                   regionCode: 'JP',
               };
 
-    let response: Response;
-    try {
-        response = await fetch(url, {
+    const response = await callPlacesApi(
+        url,
+        {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -93,27 +149,9 @@ export async function searchPlaces(env: Env, args: SearchArgs): Promise<Place[]>
                 'X-Goog-FieldMask': FIELD_MASK,
             },
             body: JSON.stringify(body),
-            signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-        });
-    } catch (error) {
-        const timedOut = error instanceof Error && error.name === 'TimeoutError';
-        throw new PlacesApiError(
-            timedOut ? 'Places API timed out' : 'Failed to reach Places API',
-            504,
-        );
-    }
-
-    if (!response.ok) {
-        const detail = await response.text().catch(() => '');
-        console.error('places_api_error', {
-            status: response.status,
-            detail: detail.slice(0, 500),
-        });
-
-        // 認証・課金の失敗はこちらの設定ミスなので 500、それ以外は 502 として扱う。
-        const status = response.status === 401 || response.status === 403 ? 500 : 502;
-        throw new PlacesApiError('Places API returned an error', status, response.status);
-    }
+        },
+        'Places search',
+    );
 
     const data = (await response.json()) as { places?: Place[] };
     return data.places ?? [];
@@ -122,6 +160,9 @@ export async function searchPlaces(env: Env, args: SearchArgs): Promise<Place[]>
 /**
  * Places の写真バイナリを取得する。
  * API キーをクライアントに出さないため、必ず Worker 側で叩く。
+ *
+ * キーは**ヘッダ**で送る。クエリに載せると上流のアクセスログや中間のキャッシュに
+ * キーごと残る。
  */
 export async function fetchPhoto(
     env: Env,
@@ -132,25 +173,13 @@ export async function fetchPhoto(
     const url = new URL(`https://places.googleapis.com/v1/${photoName}/media`);
     url.searchParams.set('maxWidthPx', String(maxWidthPx));
     url.searchParams.set('maxHeightPx', String(maxHeightPx));
-    url.searchParams.set('key', env.GOOGLE_API_KEY);
 
-    let response: Response;
-    try {
-        response = await fetch(url, {
+    return callPlacesApi(
+        url,
+        {
             redirect: 'follow',
-            signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-        });
-    } catch {
-        throw new PlacesApiError('Failed to reach Places photo endpoint', 504);
-    }
-
-    if (!response.ok) {
-        throw new PlacesApiError(
-            'Places photo endpoint returned an error',
-            response.status === 404 ? 404 : 502,
-            response.status,
-        );
-    }
-
-    return response;
+            headers: { 'X-Goog-Api-Key': env.GOOGLE_API_KEY },
+        },
+        'Places photo',
+    );
 }
