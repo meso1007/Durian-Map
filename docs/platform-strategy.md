@@ -48,11 +48,11 @@ B を採る理由:
       Cloudflare Workers（`backend/`）にデプロイ済み: https://durian-map-api.dailyreading.workers.dev
       Next.js の `/api/search` Route Handler は廃止し、Workers に一本化した。
       フロントは `NEXT_PUBLIC_API_BASE_URL` 経由で叩く（`frontend/src/lib/api.ts`）。
-- [ ] **2. localStorage 依存を抽象化する**
-      保存済みカフェが `localStorage` 直書きのままだと iOS 側と共有できない。
-      `lib/storage.ts` のようなラッパーを 1 枚挟み、後からネイティブストレージやサーバー保存に
-      差し替えられるようにする。**UI コンポーネントから `localStorage` を直接呼ばない。**
-- [ ] **3. Capacitor 導入**（上記 2 の後）
+- [x] **2. localStorage 依存を抽象化する** — 完了
+      `frontend/src/lib/storage.ts` に集約。API は非同期にしてあるので、実体を
+      Capacitor Preferences やサーバー保存に差し替えても UI 側の修正は不要。
+      **UI コンポーネントから `localStorage` を直接呼ばないこと。**
+- [ ] **3. Capacitor 導入** — 準備は整った。次はこれ
 
 ## デプロイ先
 

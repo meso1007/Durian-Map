@@ -20,6 +20,7 @@
   /* トロピカルアクセント */
   --tropic-mango-500: #f6a21b;
   --tropic-mango-700: #d97706;
+  --tropic-hibiscus-700: #b3164f;
   --tropic-hibiscus-500: #e2467c;
   --tropic-hibiscus-100: #fce1ea;
   --tropic-lagoon-500: #2bb3b1;
@@ -37,6 +38,10 @@
   --dm-border: var(--durian-cream-200);
   --dm-text: var(--durian-seed-900);
   --dm-text-muted: var(--durian-seed-600);
+
+  /* 淡色地に文字を載せるとき用の濃色。4.5:1 を満たす（docs/design.md 3節） */
+  --dm-success-text: var(--durian-green-700);
+  --dm-accent-text: var(--tropic-hibiscus-700);
 
   /* 影は 1 種類だけ（docs/design.md 4節） */
   --dm-shadow: 0 2px 8px rgba(20, 83, 45, 0.08);
@@ -57,6 +62,8 @@
   --color-info-soft: var(--tropic-lagoon-100);
   --color-success: var(--dm-success);
   --color-success-soft: var(--durian-lime-100);
+  --color-success-text: var(--dm-success-text);
+  --color-accent-text: var(--dm-accent-text);
   --color-star: var(--tropic-sun-500);
   --color-error: var(--dm-error);
   --color-surface: var(--dm-surface);

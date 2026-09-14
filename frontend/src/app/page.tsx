@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation';
 
 import { ApiError, getCafePhotoUrl, searchCafes } from '@/lib/api';
 import type { Cafe, Coordinates } from '@/lib/api';
+import { loadSavedCafes, saveSavedCafes } from '@/lib/storage';
 
 const MapView = dynamic(() => import('./components/MapView'), {
   ssr: false,
@@ -185,17 +186,10 @@ function CafeFinderContent() {
     }
   }, [errorMsg]);
 
-  // 保存済みカフェをマウント後にlocalStorageから復元（SSRとのハイドレーション不一致を防ぐ）
+  // 保存済みカフェをマウント後に復元（SSRとのハイドレーション不一致を防ぐ）
   useEffect(() => {
     const loadSaved = async () => {
-      try {
-        const stored = localStorage.getItem('saved_cafes');
-        if (stored) {
-          setSavedCafes(JSON.parse(stored) as Cafe[]);
-        }
-      } catch {
-        // 壊れたデータは無視
-      }
+      setSavedCafes(await loadSavedCafes());
     };
 
     void loadSaved();
@@ -335,7 +329,7 @@ function CafeFinderContent() {
       ? savedCafes.filter(c => c.id !== cafe.id)
       : [...savedCafes, cafe];
     setSavedCafes(newSaved);
-    localStorage.setItem('saved_cafes', JSON.stringify(newSaved));
+    void saveSavedCafes(newSaved);
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -677,7 +671,7 @@ function OpenStatusBadge({ openNow }: { openNow?: boolean }) {
 
   return (
     <span
-      className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium leading-none ${openNow ? 'bg-success-soft text-success' : 'bg-accent-soft text-accent'}`}
+      className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium leading-none ${openNow ? 'bg-success-soft text-success-text' : 'bg-accent-soft text-accent-text'}`}
     >
       <span className={`h-1.5 w-1.5 rounded-full ${openNow ? 'bg-success' : 'bg-accent'}`} />
       {openNow ? '営業中' : '準備中'}
@@ -787,7 +781,7 @@ function SelectedCafePanel({ cafe, area, distance, isSaved, onToggleSave, onClos
             type="button"
             onClick={onToggleSave}
             aria-pressed={isSaved}
-            className={`min-h-[56px] flex flex-col items-center justify-center gap-1 rounded-xl border text-xs font-bold ${isSaved ? 'border-accent bg-accent-soft text-accent' : 'border-border bg-surface text-text'}`}
+            className={`min-h-[56px] flex flex-col items-center justify-center gap-1 rounded-xl border text-xs font-bold ${isSaved ? 'border-accent bg-accent-soft text-accent-text' : 'border-border bg-surface text-text'}`}
           >
             <BookmarkIcon filled={isSaved} />
             {isSaved ? '保存済み' : '保存'}
