@@ -66,6 +66,32 @@ bun run deploy   # → https://durian-map.pages.dev
 
 **分岐してよいのは「Web に無い機能の代替」だけで、デザインは分岐させない。**
 
+### 画面の組み立て
+
+`app/page.tsx` は **hook を組み合わせて配置するだけ**（150 行以下を保つ）。
+状態管理ライブラリは入れない。ロジックを足すときは page ではなく hook 側に足す。
+
+| hook | 持っているもの |
+|---|---|
+| `useCafeSearch` | 検索。`AbortController` + 世代 ID で古い応答を捨てる。状態は判別共用体 |
+| `useSearchUrlState` | **URL が状態の正**。`?area=` / `?lat=&lng=&r=` / `&cafe=` / `?tab=saved` |
+| `useCurrentLocation` | 現在地と、そこから引いた地名（`resolvedAreaName`） |
+| `useSavedCafes` | 保存済み。楽観更新 + 失敗時ロールバック |
+| `useCafeFilters` | 絞り込みと並び替え、一覧に出す配列 |
+| `useMapSelection` | 選択とリストのスクロール / フォーカス同期 |
+| `useToast` | エラー / 完了の通知 |
+| `useCafeMarkers` / `useMapCamera` | 地図のピン（id で差分更新）と視点 |
+
+守ること:
+
+- **URL は状態の写し。** 検索・選択・タブ切替のたびに `router.replace` で書き戻す。
+  リロードと共有リンクの復元はここだけで完結させる（別経路を作らない）。
+- **逆ジオコードの結果で入力欄を上書きしない。** 地名は `resolvedAreaName` という
+  別 state に置く。打っている途中の文字を非同期の結果で消さないため。
+- **起動時にいきなり位置情報を要求しない。** `hasGrantedPermission()` が true の
+  ときだけ取りに行く。一度拒否されると「近くからさがす」が永久に効かなくなる。
+- 写真は `photoSig`（サーバーの HMAC 署名）が無いと出せない。サイズは 200 / 400 / 800 のみ。
+
 ## iOS（Capacitor）
 
 必要なもの: Xcode（26 系で確認）。**CocoaPods は不要** — 依存は Swift Package Manager。

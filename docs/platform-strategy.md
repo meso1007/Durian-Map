@@ -76,11 +76,28 @@ Web と iOS で実体が変わるものは、すべて `frontend/src/lib/` の�
 |---|---|---|
 | `lib/platform.ts` | `isNativePlatform()` が false | true |
 | `lib/storage.ts` | localStorage | Capacitor Preferences |
-| `lib/geolocation.ts` | `navigator.geolocation` | Capacitor Geolocation |
+| `lib/geolocation.ts` | `navigator.geolocation` / `navigator.permissions` | Capacitor Geolocation（`checkPermissions()`） |
 | `lib/share.ts` | Web Share API / クリップボード | ネイティブ共有シート |
 | `lib/api.ts` | 同じ Worker を叩く（差分なし） | 同左 |
 
 分岐してよいのは「Web に無い機能の代替」だけ。**見た目は分岐させない**（`docs/design.md` 6節）。
+
+### 権限は「聞く前に確認する」
+
+`lib/geolocation.ts` の `hasGrantedPermission()` は、**すでに許可されているか**だけを
+調べる（Web は Permissions API、iOS は Capacitor の `checkPermissions()`。
+判定できない環境では false に倒す）。
+
+起動直後の暗黙の現在地取得はこれが true のときだけ走らせる。未許可の状態で
+`getCurrentPosition()` を呼ぶと、アプリの説明を読む前に OS のダイアログが出て
+拒否されやすく、**一度拒否されると「近くからさがす」が永久に効かなくなる**。
+iOS はブラウザと違い、拒否の取り消しが「設定」アプリの中にしかないので影響が大きい。
+
+### 第三者 API をブラウザから直接叩かない
+
+逆ジオコード（Nominatim）は **Worker の `/api/reverse-geocode` 経由**にする。
+ブラウザからは User-Agent を付けられず利用規約を満たせない上、ユーザーの座標が
+第三者へ直接渡ってしまう。Worker を挟めば正しい UA・キャッシュ・座標の丸めが効く。
 
 ## iOS 固有の落とし穴
 

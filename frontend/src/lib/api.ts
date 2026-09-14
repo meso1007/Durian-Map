@@ -18,7 +18,12 @@ export type Cafe = {
     lng?: number;
     rating?: number;
     userRatingCount?: number;
+    /** サーバーがレスポンス時に JST で計算した営業状態。キャッシュされた値ではない。 */
     openNow?: boolean;
+    /** 営業中のときの今日の閉店時刻（"21:00"）。 */
+    closesAt?: string;
+    /** 閉店中のときの次の開店時刻（"8:00"）。 */
+    opensAt?: string;
     /** 曜日別の営業時間（7 要素・日本語）。取得できないときは undefined。 */
     weekdayDescriptions?: string[];
     /** 国内向け表記の電話番号。 */
@@ -27,6 +32,11 @@ export type Cafe = {
     priceLevel?: string;
     /** Places の写真リソース名。表示は getCafePhotoUrl() を通す。 */
     photoName?: string;
+    /**
+     * 写真 URL の署名。サーバーが photoName とサイズに対して発行する。
+     * これが無いと /api/photo は 403 を返すので、写真は出せない。
+     */
+    photoSig?: string;
 };
 
 export type Coordinates = {
@@ -61,6 +71,12 @@ function getBaseUrl(): string {
     return base;
 }
 
+/**
+ * 写真の要求サイズ。サーバーはこの 3 つしか受け付けない
+ * （任意サイズを許すとキャッシュキーが無数に増え、Places の写真課金が効かなくなる）。
+ */
+export type PhotoSize = 200 | 400 | 800;
+
 type SearchParams =
     | { category: string; area: string }
     | { category: string; location: Coordinates; radius?: number };
@@ -68,7 +84,7 @@ type SearchParams =
 /**
  * カフェを検索する。チェーン店の除外は API 側で済んでいる。
  */
-export async function searchCafes(params: SearchParams): Promise<Cafe[]> {
+export async function searchCafes(params: SearchParams, signal?: AbortSignal): Promise<Cafe[]> {
     const query = new URLSearchParams({ category: params.category });
 
     if ('area' in params) {
@@ -81,8 +97,10 @@ export async function searchCafes(params: SearchParams): Promise<Cafe[]> {
 
     let response: Response;
     try {
-        response = await fetch(`${getBaseUrl()}/api/search?${query}`);
-    } catch {
+        response = await fetch(`${getBaseUrl()}/api/search?${query}`, { signal });
+    } catch (error) {
+        // 中断は呼び出し側が世代で判定するので、そのまま投げ直す。
+        if (error instanceof DOMException && error.name === 'AbortError') throw error;
         throw new ApiError('ネットワークに接続できませんでした。通信環境をご確認ください。');
     }
 
@@ -111,19 +129,51 @@ export async function searchCafes(params: SearchParams): Promise<Cafe[]> {
  * 写真がない場合は null。
  */
 export function getCafePhotoUrl(
-    cafe: Pick<Cafe, 'photoName'>,
-    size = 400,
+    cafe: Pick<Cafe, 'photoName' | 'photoSig'>,
+    size: PhotoSize = 400,
 ): string | null {
     const base = findBaseUrl();
 
     // 描画中に呼ばれるので、設定漏れでも画面を落とさず「写真なし」に倒す。
-    if (!cafe.photoName || !base) return null;
+    // 署名が無い場合も同じ（サーバーが 403 を返すため、壊れた画像より無いほうがよい）。
+    if (!cafe.photoName || !cafe.photoSig || !base) return null;
 
     const query = new URLSearchParams({
         name: cafe.photoName,
+        sig: cafe.photoSig,
         maxWidthPx: String(size),
         maxHeightPx: String(size),
     });
 
     return `${base}/api/photo?${query}`;
+}
+
+/**
+ * 座標から地名を引く（Worker の /api/reverse-geocode 経由）。
+ *
+ * ブラウザから Nominatim を直接叩かないこと。User-Agent を付けられず利用規約に反する上、
+ * ユーザーの座標が第三者へ直接渡ってしまう。
+ * 失敗時は例外にせず null を返す — 地名は「あると嬉しい」情報でしかないため。
+ */
+export async function reverseGeocode(
+    coordinates: Coordinates,
+    signal?: AbortSignal,
+): Promise<string | null> {
+    const base = findBaseUrl();
+    if (!base) return null;
+
+    const query = new URLSearchParams({
+        lat: String(coordinates.lat),
+        lng: String(coordinates.lng),
+    });
+
+    try {
+        const response = await fetch(`${base}/api/reverse-geocode?${query}`, { signal });
+        if (!response.ok) return null;
+
+        const data = (await response.json()) as { area?: string | null };
+        return data.area ?? null;
+    } catch {
+        return null;
+    }
 }
