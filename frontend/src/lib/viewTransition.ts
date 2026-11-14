@@ -7,7 +7,11 @@
 import { flushSync } from 'react-dom';
 
 type TransitionDocument = Document & {
-    startViewTransition?: (update: () => void) => { finished: Promise<void> };
+    startViewTransition?: (update: () => void) => {
+        finished: Promise<void>;
+        ready: Promise<void>;
+        updateCallbackDone: Promise<void>;
+    };
 };
 
 /** 一覧と詳細で同じ写真であることを示す名前。同時に 2 つの要素へ付けないこと（遷移が中断される）。 */
@@ -28,6 +32,9 @@ export function withViewTransition(update: () => void, onFinished?: () => void):
     }
 
     const transition = doc.startViewTransition(() => flushSync(update));
+    // 遷移が飛ばされると ready などが reject される。画面は更新済みなので、握りつぶしてよい。
+    transition.ready.catch(() => undefined);
+    transition.updateCallbackDone.catch(() => undefined);
     // 中断された場合も後始末は必ず行う。
     void transition.finished.catch(() => undefined).then(() => onFinished?.());
 }

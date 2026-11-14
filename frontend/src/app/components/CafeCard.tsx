@@ -17,6 +17,8 @@ type Props = {
   distance: number | null;
   /** 保存済みなら状態。未保存なら undefined（バッジを出さない）。 */
   savedStatus?: SavedStatus;
+  /** いまの時刻（ms）。残り時間の計算に使う。親が 1 分ごとに更新する。 */
+  now: number;
   /** 一覧の何番目か。出現をずらすのに使う（先頭 8 枚まで）。 */
   index: number;
   onSelect: (id: string) => void;
@@ -28,12 +30,12 @@ type Props = {
  *
  * 20 件並ぶので memo する。onSelect は id を受け取る形にしてカードごとのクロージャを作らない。
  */
-function CafeCard({ cafe, distance, savedStatus, index, onSelect }: Props) {
+function CafeCard({ cafe, distance, savedStatus, now, index, onSelect }: Props) {
   const photoUrl = getCafePhotoUrl(cafe, 200);
   const openStatus = getOpenStatusLabel(cafe);
 
   // 閉店まで 1 時間を切っていたら、時刻ではなく残り時間で伝える。
-  const minutesLeft = cafe.openNow ? getMinutesUntilClose(cafe.closesAt) : null;
+  const minutesLeft = cafe.openNow ? getMinutesUntilClose(cafe.closesAt, new Date(now)) : null;
   const closingSoon = minutesLeft !== null && minutesLeft <= 60;
 
   return (

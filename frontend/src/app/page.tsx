@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Cafe, Coordinates } from '@/lib/api';
 import { getMapInsets, getSheetHeights } from '@/lib/layout';
@@ -40,7 +40,7 @@ function CafeFinderContent() {
   // 書き戻す（リロードでも共有リンクでも同じ画面に戻る）。
   const initialUrl = useInitialSearchUrl();
   const [tab, setTab] = useState<TabId>(initialUrl.tab);
-  const [snap, setSnap] = useState<SheetSnap>(initialUrl.cafeId ? 'full' : 'half');
+  const [snap, setSnap] = useState<SheetSnap>('half');
 
   const { selectedId, listRef, select, clear, dismiss } = useMapSelection(initialUrl.cafeId);
   const urlState = { tab, query: query ?? initialUrl.query, cafeId: selectedId };
@@ -91,8 +91,27 @@ function CafeFinderContent() {
       )
     : null;
 
-  const searchArea = query?.kind === 'area' ? query.area : initialUrl.query?.kind === 'area' ? initialUrl.query.area : '';
+  // 検索欄に出すエリア名。現在地からの検索に切り替えたら空にする（前のエリア名を残さない）。
+  const shownQuery = query ?? initialUrl.query;
+  const searchArea = shownQuery?.kind === 'area' ? shownQuery.area : '';
   const searchTitle = query?.kind === 'nearby' ? 'この辺りのカフェ' : searchArea ? `${searchArea}のカフェ` : 'カフェ';
+
+  // カードに渡すコールバックを作り直さないよう、段と画面幅は ref で読む
+  // （作り直すと、シートを動かすたびにカード 20 枚が再描画される）。
+  const layoutRef = useRef({ isDesktop: viewport.isDesktop, snap });
+  useEffect(() => {
+    layoutRef.current = { isDesktop: viewport.isDesktop, snap };
+  }, [viewport.isDesktop, snap]);
+
+  // 共有リンクの店が、いまの検索結果に居なかった。選択を残すと URL に店の id だけが残り、
+  // 何も開いていないのに「選択中」になるので、解いて理由を伝える。
+  const searchSucceeded = searchState.status === 'success';
+  useEffect(() => {
+    if (tab === 'search' && searchSucceeded && selectedId && !selectedCafe) {
+      clear();
+      showNotice('リンクのカフェは、いまの検索結果にありませんでした');
+    }
+  }, [tab, searchSucceeded, selectedId, selectedCafe, clear, showNotice]);
 
   /**
    * 一覧 → 詳細。カードの写真が詳細の大きな写真へそのまま広がるようにつなぐ。
@@ -105,7 +124,8 @@ function CafeFinderContent() {
         setSnap('full');
       };
 
-      const photo = viewport.isDesktop || snap === 'full' ? findCardPhoto(listRef.current, id) : null;
+      const { isDesktop, snap: currentSnap } = layoutRef.current;
+      const photo = isDesktop || currentSnap === 'full' ? findCardPhoto(listRef.current, id) : null;
       if (!photo) {
         open();
         return;
@@ -118,7 +138,7 @@ function CafeFinderContent() {
         open();
       });
     },
-    [select, listRef, viewport.isDesktop, snap],
+    [select, listRef],
   );
 
   /** 詳細 → 一覧。逆向きに、詳細の写真を元のカードの写真へ戻す。 */
@@ -178,6 +198,7 @@ function CafeFinderContent() {
         selectedId={selectedId}
         savedIds={savedIds}
         currentLocation={currentLocation}
+        includeCurrentLocation={query?.kind === 'nearby'}
         insets={insets}
         searchToken={completedCount}
         onSelectCafe={handleSelectFromMap}

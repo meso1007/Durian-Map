@@ -128,6 +128,9 @@ export default function SearchBar({
             setActiveIndex(-1);
           }}
           onKeyDown={(event) => {
+            // 日本語入力の変換中は、矢印キーも Enter も IME のもの。候補の操作に使わない。
+            if (event.nativeEvent.isComposing) return;
+
             if (event.key === 'Escape') {
               if (showSuggestions) event.stopPropagation();
               setOpen(false);

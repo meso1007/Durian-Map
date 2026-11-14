@@ -6,7 +6,10 @@ import { nextSnap, resolveSnap, rubberBand } from '@/lib/sheet';
 import type { SheetSnap } from '@/lib/sheet';
 
 /** これ以上動かしたらドラッグとみなす（px）。未満はタップとして扱う。 */
-const DRAG_THRESHOLD = 6;
+const DRAG_THRESHOLD = 10;
+
+/** ドラッグの直後、この時間に届いた click は捨てる（ms）。iOS は click を遅れて合成する。 */
+const CLICK_SUPPRESS_MS = 350;
 
 /** 速度は直近この時間ぶんの動きから出す（ms）。指を止めてから離したら 0 になる。 */
 const VELOCITY_WINDOW = 90;
@@ -46,8 +49,8 @@ export function useSheetDrag({
         samples: Sample[];
     } | null>(null);
 
-    /** ドラッグで終わった操作の直後に飛んでくる click を 1 回だけ捨てる。 */
-    const suppressClick = useRef(false);
+    /** この時刻（event.timeStamp）までに届いた click は、ドラッグの終わりとして捨てる。 */
+    const suppressClickUntil = useRef(0);
 
     const release = useCallback(() => {
         const sheet = sheetRef.current;
@@ -62,11 +65,15 @@ export function useSheetDrag({
         (event: React.PointerEvent<HTMLElement>) => {
             if (!enabled || (event.pointerType === 'mouse' && event.button !== 0)) return;
 
+            // 段へ動いている途中でつかまれることがある。目標の高さではなく、いまの実際の高さから始める。
+            const sheet = sheetRef.current;
+            const visible = sheet ? window.innerHeight - sheet.getBoundingClientRect().top : heights[snap];
+
             drag.current = {
                 pointerId: event.pointerId,
                 startY: event.clientY,
-                startVisible: heights[snap],
-                visible: heights[snap],
+                startVisible: visible,
+                visible,
                 active: false,
                 samples: [{ y: event.clientY, time: event.timeStamp }],
             };
@@ -109,11 +116,7 @@ export function useSheetDrag({
             drag.current = null;
             if (!state.active) return;
 
-            suppressClick.current = true;
-            // click が来なかった場合（ポインタが要素の外で離れた等）に備えて、次のフレームで戻す。
-            window.setTimeout(() => {
-                suppressClick.current = false;
-            }, 0);
+            suppressClickUntil.current = event.timeStamp + CLICK_SUPPRESS_MS;
 
             const recent = state.samples.filter((sample) => event.timeStamp - sample.time <= VELOCITY_WINDOW);
             const first = recent[0];
@@ -127,9 +130,9 @@ export function useSheetDrag({
     );
 
     const onClickCapture = useCallback((event: React.MouseEvent<HTMLElement>) => {
-        if (!suppressClick.current) return;
+        if (event.timeStamp > suppressClickUntil.current) return;
 
-        suppressClick.current = false;
+        suppressClickUntil.current = 0;
         event.preventDefault();
         event.stopPropagation();
     }, []);

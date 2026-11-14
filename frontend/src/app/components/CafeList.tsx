@@ -3,6 +3,7 @@
 import type { Cafe, Coordinates } from '@/lib/api';
 import { getDistanceMeters } from '@/lib/geo';
 import type { SavedStatus } from '@/lib/storage';
+import { useNow } from '@/hooks/useNow';
 
 import CafeCard from './CafeCard';
 import EmptyState from './EmptyState';
@@ -43,6 +44,8 @@ export default function CafeList({
   listKey,
   listRef,
 }: Props) {
+  const now = useNow();
+
   return (
     <div
       ref={listRef}
@@ -74,6 +77,7 @@ export default function CafeList({
               <CafeCard
                 cafe={cafe}
                 index={index}
+                now={now}
                 distance={getDistanceMeters(currentLocation, cafe)}
                 savedStatus={showSavedBadge ? getSavedStatus(cafe.id) : undefined}
                 onSelect={onSelect}

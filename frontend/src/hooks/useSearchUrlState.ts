@@ -143,6 +143,12 @@ export function useRestoreSearchFromUrl(
         if (restored.current || !initial.query) return;
         restored.current = true;
         search(initial.query);
+
+        // 開発時の StrictMode は effect を「実行 → 後始末 → 再実行」する。後始末で useCafeSearch が
+        // 検索を中断するので、ここで印を戻しておかないと再実行で検索されず、読み込み中のまま止まる。
+        return () => {
+            restored.current = false;
+        };
     }, [initial, search]);
 }
 

@@ -10,7 +10,7 @@ import type { MapInsets } from '@/lib/layout';
 import { snapRadius } from '@/hooks/useCafeSearch';
 import type { SearchRadius } from '@/hooks/useCafeSearch';
 import { useCafeMarkers } from '@/hooks/useCafeMarkers';
-import { useMapCamera } from '@/hooks/useMapCamera';
+import { focusOn, getVisibleCenter, useMapCamera } from '@/hooks/useMapCamera';
 
 import MapFallback from './MapFallback';
 import { CURRENT_LOCATION_DOT, CURRENT_LOCATION_RING, MAP_BACKGROUND, MAP_STYLE } from './map/mapStyle';
@@ -27,6 +27,8 @@ export type MapViewProps = {
   selectedId: string | null;
   savedIds: ReadonlySet<string>;
   currentLocation: Coordinates | null;
+  /** 結果を収めるときに現在地も入れるか（現在地からの検索のときだけ）。 */
+  includeCurrentLocation: boolean;
   /** 地図のうち UI が覆っている帯。視点とピンの収め方に使う。 */
   insets: MapInsets;
   /** 検索が完了するたびに変わる値。地図が「検索直後の視点」を覚え直す合図。 */
@@ -39,7 +41,7 @@ export type MapViewProps = {
 };
 
 export default function MapView(props: MapViewProps) {
-  const { cafes, selectedId, savedIds, currentLocation, insets, searchToken, onSelectCafe, onClearSelection, onSearchThisArea, onError } = props;
+  const { cafes, selectedId, savedIds, currentLocation, includeCurrentLocation, insets, searchToken, onSelectCafe, onClearSelection, onSearchThisArea, onError } = props;
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
   const [failed, setFailed] = useState(false);
@@ -84,10 +86,17 @@ export default function MapView(props: MapViewProps) {
           selectedId={selectedId}
           savedIds={savedIds}
           currentLocation={currentLocation}
+          includeCurrentLocation={includeCurrentLocation}
+          searchToken={searchToken}
           insets={insets}
           onSelectCafe={onSelectCafe}
         />
-        <ResearchPrompt searchToken={searchToken} insets={insets} onSearchThisArea={onSearchThisArea} />
+        <ResearchPrompt
+          searchToken={searchToken}
+          selectedId={selectedId}
+          insets={insets}
+          onSearchThisArea={onSearchThisArea}
+        />
         <ZoomButtons insets={insets} />
       </Map>
     </APIProvider>
@@ -100,10 +109,15 @@ function MapLayers({
   selectedId,
   savedIds,
   currentLocation,
+  includeCurrentLocation,
+  searchToken,
   insets,
   onSelectCafe,
-}: Pick<MapViewProps, 'cafes' | 'selectedId' | 'savedIds' | 'currentLocation' | 'insets' | 'onSelectCafe'>) {
-  useMapCamera({ cafes, selectedId, currentLocation, insets });
+}: Pick<
+  MapViewProps,
+  'cafes' | 'selectedId' | 'savedIds' | 'currentLocation' | 'includeCurrentLocation' | 'searchToken' | 'insets' | 'onSelectCafe'
+>) {
+  useMapCamera({ cafes, selectedId, currentLocation, includeCurrentLocation, searchToken, insets });
   useCafeMarkers({ cafes, selectedId, savedIds, onSelectCafe });
 
   return <CurrentLocationMarker currentLocation={currentLocation} />;
@@ -134,27 +148,32 @@ function CurrentLocationMarker({ currentLocation }: { currentLocation: Coordinat
  */
 function ResearchPrompt({
   searchToken,
+  selectedId,
   insets,
   onSearchThisArea,
-}: Pick<MapViewProps, 'searchToken' | 'insets' | 'onSearchThisArea'>) {
+}: Pick<MapViewProps, 'searchToken' | 'selectedId' | 'insets' | 'onSearchThisArea'>) {
   const map = useMap();
   const [visible, setVisible] = useState(false);
   const baselineRef = useRef<Coordinates | null>(null);
   // 次に静止したときの中心を基準として取り直す（検索直後は fitBounds が走る）。
   const resetBaselineRef = useRef(true);
 
+  const insetsRef = useRef(insets);
+  useEffect(() => {
+    insetsRef.current = insets;
+  }, [insets]);
+
   useEffect(() => {
     if (!map) return;
 
-    // 検索が終わるたびに基準を取り直す。直後に fitBounds が走るので、
-    // その結果落ち着いた位置が「検索したエリア」になる。
+    // 検索が終わるたび・店を選ぶたびに基準を取り直す。どちらも直後にアプリ側が視点を動かすので、
+    // その結果落ち着いた位置を基準にする（アプリが動かした分でピルを出さない）。
     resetBaselineRef.current = true;
 
     const listener = map.addListener('idle', () => {
-      const center = map.getCenter();
-      if (!center) return;
-
-      const position = { lat: center.lat(), lng: center.lng() };
+      // 比べるのは「見えている領域の中央」。地図の中心は UI の下に入っていることがある。
+      const position = getVisibleCenter(map, insetsRef.current);
+      if (!position) return;
 
       if (resetBaselineRef.current || !baselineRef.current) {
         baselineRef.current = position;
@@ -167,17 +186,19 @@ function ResearchPrompt({
     });
 
     return () => listener.remove();
-  }, [map, searchToken]);
+  }, [map, searchToken, selectedId]);
 
   // 検索は 1 回以上済んでいること（初回表示では「再」検索にならない）。
   if (!visible || searchToken === 0) return null;
 
   const handleClick = () => {
-    const center = map?.getCenter();
+    // 検索の中心は、ユーザーに見えている領域の中央。地図の中心で検索すると、
+    // 結果の半分がシートやパネルの下に入る。
+    const center = map ? getVisibleCenter(map, insets) : null;
     if (!map || !center) return;
 
     setVisible(false);
-    onSearchThisArea({ lat: center.lat(), lng: center.lng() }, viewportRadius(map, insets));
+    onSearchThisArea(center, viewportRadius(map, insets));
   };
 
   return (
@@ -206,7 +227,15 @@ function ZoomButtons({ insets }: Pick<MapViewProps, 'insets'>) {
   const map = useMap();
   if (!map) return null;
 
-  const zoomBy = (delta: number) => map.setZoom((map.getZoom() ?? 15) + delta);
+  // 見えている領域の中央を基準に拡大・縮小する。地図の中心を基準にすると、
+  // 中央に寄せていた店が拡大のたびにパネルの下へ逃げていく。
+  const zoomBy = (delta: number) => {
+    const center = getVisibleCenter(map, insets);
+    const zoom = (map.getZoom() ?? 15) + delta;
+
+    if (center) focusOn(map, center, insets, zoom);
+    else map.setZoom(zoom);
+  };
 
   return (
     <div

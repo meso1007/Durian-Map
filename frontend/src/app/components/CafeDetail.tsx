@@ -19,6 +19,7 @@ import {
 import { formatDistance, formatWalkingMinutes } from '@/lib/geo';
 import { shareUrl } from '@/lib/share';
 import type { SavedStatus } from '@/lib/storage';
+import { useNow } from '@/hooks/useNow';
 import { CAFE_PHOTO_TRANSITION } from '@/lib/viewTransition';
 
 import BrandMark from './BrandMark';
@@ -76,9 +77,10 @@ export default function CafeDetail({
   const domain = getCafeDomain(cafe);
   const photoUrl = getCafePhotoUrl(cafe, 800);
   const weekHours = getWeekHours(cafe.weekdayDescriptions);
+  const now = useNow();
 
   // 閉店まで 1 時間を切っていたら、時刻ではなく残り時間で伝える（いま向かって間に合うかが分かる）。
-  const minutesLeft = cafe.openNow ? getMinutesUntilClose(cafe.closesAt) : null;
+  const minutesLeft = cafe.openNow ? getMinutesUntilClose(cafe.closesAt, new Date(now)) : null;
   const closingSoon = minutesLeft !== null && minutesLeft <= 60 ? minutesLeft : null;
   const categoryLabel = getCategoryLabel(cafe.category);
   const priceLabel = getPriceLabel(cafe);
