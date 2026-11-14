@@ -29,3 +29,26 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         CODE_SIGN_STYLE: Automatic
+  # 実機を操作して画面を撮るための UI テスト（見た目の確認用）。
+  DurianMapUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - DurianMapUITests
+    dependencies:
+      - target: DurianMap
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.durianmap.app.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic
+schemes:
+  DurianMap:
+    build:
+      targets:
+        DurianMap: all
+        DurianMapUITests: [test]
+    test:
+      targets:
+        - DurianMapUITests

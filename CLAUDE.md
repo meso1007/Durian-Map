@@ -114,6 +114,9 @@
 | `DurianMap/Detail.swift` | 詳細と、時計の文字盤の営業時間 |
 
 - ガラスは OS 標準の部品（シート・`.buttonStyle(.glass)`・`.glassEffect`）に任せる。自前で半透明やぼかしを再現しない
+- 色は `Brand`（`DurianMapApp.swift`）経由で使う。ライト / ダークで切り替わる。固定の濃緑を文字に使わない（ダークで読めない）
+- **見た目は実機で確認する**: `DurianMapUITests/ScreenshotTests.swift` がアプリを操作してスクリーンショットを残す。
+  `xcodebuild test … -resultBundlePath out.xcresult` → `xcrun xcresulttool export attachments --path out.xcresult --output-path shots`
 - 保存は UserDefaults の `CapacitorStorage.saved_cafes`。Capacitor 版と同じキー・同じ JSON なので、上書きインストールで引き継がれる
 - **地図は MapKit。Google Places のデータを Google 以外の地図に載せるのは Google の規約に反する**ので、
   App Store に出す前に Google Maps SDK へ替えるか、データの取得元を替えること（2026-11-14 にユーザーが承知のうえで選択）

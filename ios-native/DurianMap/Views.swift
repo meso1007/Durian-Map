@@ -42,7 +42,16 @@ struct ContentView: View {
         }
         .mapControls { MapCompass() }
         .safeAreaInset(edge: .top) { searchBar }
-        .overlay(alignment: .bottomLeading) { askAI.padding(.leading, 12).padding(.bottom, detent == Self.peek ? 108 : 12) }
+        // 「AI に相談」はシートのすぐ上に置く（シートの高さは段で変わる。半分の段では画面の半分）。
+        .overlay {
+            GeometryReader { geometry in
+                askAI
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .padding(.leading, 12)
+                    .padding(.bottom, detent == Self.peek ? 108 : geometry.size.height * 0.5 + 12)
+            }
+            .ignoresSafeArea()
+        }
         .overlay(alignment: .top) { noticeView }
         .sheet(isPresented: .constant(true)) {
             SheetContent(detent: $detent)
@@ -62,7 +71,8 @@ struct ContentView: View {
             Button { model.goHome() } label: { Image("BrandMark").resizable().scaledToFit().frame(width: 30, height: 30) }
                 .accessibilityLabel("最初の画面に戻る")
 
-            TextField("エリア・駅名でさがす", text: $searchText)
+            TextField("エリア・駅名でさがす", text: $searchText, prompt: Text("エリア・駅名でさがす").foregroundStyle(.primary.opacity(0.65)))
+                .foregroundStyle(.primary)
                 .focused($searchFocused)
                 .submitLabel(.search)
                 .onSubmit { model.search(.area(searchText)); detent = .medium }
@@ -99,9 +109,12 @@ struct ContentView: View {
         } label: {
             Label("AI に相談", systemImage: "bubble.left.and.text.bubble.right")
                 .font(.subheadline.weight(.medium))
+                .foregroundStyle(.primary)
                 .padding(.horizontal, 14)
                 .frame(height: 44)
         }
+        // メニューのラベルはアクセント色になるので、本文の色に戻す（ガラスの上で読めるように）。
+        .tint(.primary)
         .glassEffect(.regular.interactive(), in: .capsule)
         .opacity(detent == .large ? 0 : 1)
     }
@@ -157,24 +170,25 @@ struct PinView: View {
     let isSaved: Bool
 
     var body: some View {
-        let stroke: Color = cafe.openNow == nil ? .secondary : (cafe.openNow! ? Brand.deepGreen : Brand.hibiscus)
+        let stroke: Color = cafe.openNow == nil ? Brand.pinText.opacity(0.6) : (cafe.openNow! ? Brand.pinOpen : Brand.pinClosed)
         Group {
             if showsRating, let rating = cafe.rating {
                 Label(String(format: "%.1f", rating), systemImage: "star.fill")
                     .font(.caption.weight(.bold))
                     .labelStyle(.titleAndIcon)
-                    .foregroundStyle(isSelected ? .white : .primary)
+                    .foregroundStyle(isSelected ? Brand.pin : Brand.pinText)
                     .padding(.horizontal, 8).frame(height: 28)
-                    .background(isSelected ? AnyShapeStyle(Brand.deepGreen) : AnyShapeStyle(.background), in: .capsule)
-                    .overlay(Capsule().strokeBorder(isSelected ? Brand.deepGreen : stroke, lineWidth: 2))
+                    .background(isSelected ? Brand.pinOpen : Brand.pin, in: .capsule)
+                    .overlay(Capsule().strokeBorder(isSelected ? Brand.pin : stroke, lineWidth: 2))
+                    .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
             } else {
-                Circle().fill(.background).frame(width: 18, height: 18)
+                Circle().fill(Brand.pin).frame(width: 18, height: 18)
                     .overlay(Circle().strokeBorder(stroke, lineWidth: 2.5))
                     .overlay(Circle().fill(stroke).frame(width: 5, height: 5))
             }
         }
         .overlay(alignment: .topTrailing) {
-            if isSaved { Circle().fill(Brand.hibiscus).frame(width: 9, height: 9).offset(x: 3, y: -3) }
+            if isSaved { Circle().fill(Brand.pinClosed).frame(width: 9, height: 9).offset(x: 3, y: -3) }
         }
         .scaleEffect(isSelected ? 1.2 : 1, anchor: .bottom)
         // 押せる領域は 44pt を確保する。
@@ -233,7 +247,7 @@ struct SheetContent: View {
             Text(title).font(.caption).foregroundStyle(.secondary)
             FlowLayout(spacing: 8) {
                 ForEach(areas, id: \.self) { area in
-                    Button(area) { model.search(.area(area)) }.buttonStyle(.glass)
+                    Button(area) { model.search(.area(area)) }.buttonStyle(.glass).foregroundStyle(.primary)
                 }
             }
         }
@@ -252,7 +266,7 @@ struct SheetContent: View {
                     // 保存の一覧（いま見えている分）を、文章と一覧のリンクにして友達に送る。
                     if model.tab == .saved, !cafes.isEmpty {
                         ShareLink(item: Sharing.text(title: Sharing.title(cafes), cafes: cafes)) { Text("友達に送る").font(.subheadline.weight(.medium)) }
-                            .buttonStyle(.glassProminent)
+                            .buttonStyle(.glassProminent).foregroundStyle(Brand.onAccent)
                     }
                 }
                 .padding(.horizontal, 16).padding(.top, 8)
@@ -289,11 +303,15 @@ struct SheetContent: View {
     }
 
     private func chip(_ label: String, active: Bool, action: @escaping () -> Void) -> some View {
-        Button(label, action: action)
-            .font(.subheadline)
-            .buttonStyle(.glass)
-            .tint(active ? Brand.green : nil)
-            .accessibilityAddTraits(active ? .isSelected : [])
+        Group {
+            if active {
+                Button(label, action: action).buttonStyle(.glassProminent).foregroundStyle(Brand.onAccent)
+            } else {
+                Button(label, action: action).buttonStyle(.glass).foregroundStyle(.primary)
+            }
+        }
+        .font(.subheadline)
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     @ViewBuilder private var emptyState: some View {
@@ -378,7 +396,7 @@ struct TodayBar: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(.quaternary)
                     ForEach(Array(today.ranges.enumerated()), id: \.offset) { _, range in
-                        Capsule().fill(Brand.green.opacity(0.75)).frame(width: max(x(range.end) - x(range.start), 2)).offset(x: x(range.start))
+                        Capsule().fill(Brand.green.opacity(0.85)).frame(width: max(x(range.end) - x(range.start), 2)).offset(x: x(range.start))
                     }
                     let now = Format.jstMinutes()
                     if now >= 360 { Rectangle().fill(Brand.mangoDeep).frame(width: 2).offset(x: x(now) - 1) }

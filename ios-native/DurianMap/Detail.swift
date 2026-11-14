@@ -16,7 +16,7 @@ struct DetailView: View {
                     .frame(height: 150).clipShape(.rect(cornerRadius: 16))
                     .overlay(alignment: .topLeading) {
                         Button { model.selected = nil } label: { Image(systemName: "chevron.left").frame(width: 28, height: 28) }
-                            .buttonStyle(.glass).padding(8)
+                            .buttonStyle(.glass).foregroundStyle(.primary).padding(8)
                             .accessibilityLabel("一覧に戻る")
                     }
 
@@ -38,18 +38,18 @@ struct DetailView: View {
                     Button { openURL(Format.directionsURL(cafe)) } label: {
                         Label("ここへ行く", systemImage: "arrow.triangle.turn.up.right.diamond").frame(maxWidth: .infinity, minHeight: 32)
                     }
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.glassProminent).foregroundStyle(Brand.onAccent)
 
                     Button { model.toggleSave(cafe) } label: {
                         Label(savedStatus == nil ? "保存" : "保存済み", systemImage: savedStatus == nil ? "bookmark" : "bookmark.fill")
                             .frame(width: 92, height: 32)
                     }
-                    .buttonStyle(.glass).tint(savedStatus == nil ? nil : Brand.hibiscus)
+                    .buttonStyle(.glass).foregroundStyle(savedStatus == nil ? AnyShapeStyle(.primary) : AnyShapeStyle(Brand.hibiscus))
 
                     ShareLink(item: Format.mapsURL(cafe), subject: Text(cafe.name)) {
                         Image(systemName: "square.and.arrow.up").frame(width: 28, height: 32)
                     }
-                    .buttonStyle(.glass).accessibilityLabel("共有")
+                    .buttonStyle(.glass).foregroundStyle(.primary).accessibilityLabel("共有")
                 }
                 .font(.subheadline.weight(.medium))
 
@@ -90,7 +90,10 @@ struct DetailView: View {
                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
             }
             .padding(.vertical, 10)
+            .contentShape(.rect)
         }
+        // リンクの色（アクセント）を本文に移さない。色が付くのはアイコンだけ。
+        .buttonStyle(.plain)
     }
 }
 
@@ -136,13 +139,15 @@ struct HoursClock: View {
                 let start = range.start.truncatingRemainder(dividingBy: 1440) / 1440
                 let length = min(range.end - range.start, 1439.5) / 1440
                 Circle().trim(from: 0, to: length)
-                    .stroke(day.isToday ? Brand.green : Brand.green.opacity(0.55), style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                    .stroke(day.isToday ? Brand.green : Brand.green.opacity(0.6), style: StrokeStyle(lineWidth: 12, lineCap: .round))
                     .rotationEffect(.degrees(start * 360 - 90))
             }
 
             ForEach([0, 6, 12, 18], id: \.self) { hour in
+                // 文字盤の位置へまわしてから、数字そのものは逆にまわして正立させる。
                 Text("\(hour)").font(.caption2).foregroundStyle(.secondary).monospacedDigit()
-                    .offset(y: -42).rotationEffect(.degrees(Double(hour) * 15))
+                    .rotationEffect(.degrees(-Double(hour) * 15))
+                    .offset(y: -40).rotationEffect(.degrees(Double(hour) * 15))
             }
 
             if day.isToday {

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Durian Map（ネイティブ iOS 版）。チェーン店を除いた個人経営のカフェを地図で探す。
 ///
@@ -18,11 +19,32 @@ struct DurianMapApp: App {
 }
 
 /// ブランドの色（docs/design-tokens.md）。ガラスの面そのものには色を付けず、操作と状態にだけ使う。
+///
+/// すべてライト / ダークで値を切り替える。濃緑や濃いピンクは明るい面でしか読めないので、
+/// 暗い面ではロゴのライムと、明るいピンクに替える（どちらもコントラスト 4.5:1 以上を保つため）。
 enum Brand {
-    static let green = Color(red: 0x1F / 255, green: 0x6B / 255, blue: 0x3F / 255)
-    static let deepGreen = Color(red: 0x17 / 255, green: 0x49 / 255, blue: 0x2E / 255)
-    static let mango = Color(red: 0xF6 / 255, green: 0xA2 / 255, blue: 0x1B / 255)
-    static let mangoDeep = Color(red: 0xD9 / 255, green: 0x77 / 255, blue: 0x06 / 255)
-    static let hibiscus = Color(red: 0xB3 / 255, green: 0x16 / 255, blue: 0x4F / 255)
-    static let star = Color(red: 0xF2 / 255, green: 0xB7 / 255, blue: 0x05 / 255)
+    private static func dynamic(_ light: UInt32, _ dark: UInt32) -> Color {
+        func color(_ hex: UInt32) -> UIColor {
+            UIColor(red: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
+        }
+        return Color(UIColor { $0.userInterfaceStyle == .dark ? color(dark) : color(light) })
+    }
+
+    /// アクセント（主ボタン・選択中・営業中・アイコン）。
+    static let green = dynamic(0x1F6B3F, 0xA8CF3B)
+    /// アクセントの面に載せる文字。
+    static let onAccent = dynamic(0xFFFFFF, 0x17492E)
+    /// 最重要 CTA（近くからさがす）。どちらの面でも同じマンゴー。
+    static let mango = dynamic(0xF6A21B, 0xF6A21B)
+    /// 「いま」の線と針。
+    static let mangoDeep = dynamic(0xD97706, 0xFFB020)
+    /// 保存・営業時間外。
+    static let hibiscus = dynamic(0xB3164F, 0xFF8FB3)
+    static let star = dynamic(0xF2B705, 0xFFCB3D)
+    /// 地図のピンの面。地図がダークでも沈まないよう、ピンは常に明るい面にする。
+    static let pin = dynamic(0xFFFDF8, 0xFFF7E2)
+    static let pinText = dynamic(0x1F3218, 0x17492E)
+    /// ピンの枠（営業中 / 営業時間外）。明るいピンの上なので、どちらのモードでも濃い色。
+    static let pinOpen = dynamic(0x14532D, 0x14532D)
+    static let pinClosed = dynamic(0xE2467C, 0xE2467C)
 }
