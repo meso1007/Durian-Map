@@ -20,11 +20,17 @@
 |---|---|---|---|
 | API | Cloudflare Workers / Hono v4 / Zod | `backend/` | https://durian-map-api.dailyreading.workers.dev |
 | フロント（Web） | Next.js 16（App Router / `output: 'export'`）/ React 19 / Tailwind v4 | `frontend/` | https://durian-map.pages.dev（Cloudflare Pages） |
-| iOS アプリ | Capacitor 8（同じ静的書き出しを WebView に同梱。依存は SPM） | `frontend/ios/` | ローカルビルドのみ |
+| iOS アプリ（ネイティブ） | SwiftUI / MapKit / iOS 26 以降（Liquid Glass）。`xcodegen` でプロジェクトを生成 | `ios-native/` | ローカルビルドのみ |
+| iOS アプリ（旧・Capacitor） | Capacitor 8（Web の静的書き出しを WebView に同梱）。ネイティブ版が置き換える | `frontend/ios/` | ローカルビルドのみ |
 | 外部 API | Google Places API (New) / Maps JavaScript API | — | — |
 | 永続化 | 端末内のみ（Web: localStorage / iOS: Capacitor Preferences）。DB なし | — | — |
 
-パッケージマネージャ・ランタイムは **Bun**。**iOS は Web と同じコードから作る**。iOS 用に UI を別実装しないこと。
+パッケージマネージャ・ランタイムは **Bun**。
+
+**iOS は 2026-11-14 からネイティブ（Swift）で別実装している**（`ios-native/`）。それまでの方針「iOS は Web と同じコードから作る」は
+ユーザーの判断で変えた。API は 1 つのままで、チェーン店の判定・検索・写真はすべて Worker が持つ。
+表示の規則（住所や営業時間の整形、共有リンクの形式、AI に渡すプロンプト）は `frontend/src/lib/` と `ios-native/DurianMap/Core.swift` の
+両方にあるので、**片方を変えたらもう片方も直す**。
 
 ## リクエストの流れ
 
@@ -97,6 +103,21 @@
   （`page.tsx` の `md:w-[416px]`、`globals.css` の `.dm-sheet`）とそろっていないと、選んだ店がパネルの下に入る
 - 写真のサイズは一覧 200 / 詳細 800 の 2 種類だけ（サイズごとに別キャッシュになり、Places の写真課金が増える）
 - 本番ビルドの `NEXT_PUBLIC_*` は `package.json` の `build:prod` で明示指定する（`.env.local` が優先されて localhost が焼き込まれるのを防ぐ）
+
+## ネイティブ iOS（`ios-native/`）
+
+| ファイル | 役割 |
+|---|---|
+| `project.yml` | `xcodegen generate` で `DurianMap.xcodeproj` を作る（生成物はコミットしない） |
+| `DurianMap/Core.swift` | モデル・API・表示用の整形・共有 / AI のプロンプト・現在地・画面の状態（`AppModel`） |
+| `DurianMap/Views.swift` | 全面の地図 + 検索バー + 標準のシート（一覧・初回表示） |
+| `DurianMap/Detail.swift` | 詳細と、時計の文字盤の営業時間 |
+
+- ガラスは OS 標準の部品（シート・`.buttonStyle(.glass)`・`.glassEffect`）に任せる。自前で半透明やぼかしを再現しない
+- 保存は UserDefaults の `CapacitorStorage.saved_cafes`。Capacitor 版と同じキー・同じ JSON なので、上書きインストールで引き継がれる
+- **地図は MapKit。Google Places のデータを Google 以外の地図に載せるのは Google の規約に反する**ので、
+  App Store に出す前に Google Maps SDK へ替えるか、データの取得元を替えること（2026-11-14 にユーザーが承知のうえで選択）
+- ビルド: `cd ios-native && xcodegen generate && xcodebuild -scheme DurianMap -destination 'id=<端末>' -allowProvisioningUpdates DEVELOPMENT_TEAM=<チーム ID> build`
 
 ## 検証
 
