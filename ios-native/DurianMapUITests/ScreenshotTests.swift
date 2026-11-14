@@ -15,27 +15,59 @@ final class ScreenshotTests: XCTestCase {
         add(attachment)
     }
 
+    @MainActor func testDark() { run("dark") }
+    @MainActor func testLight() { run("light") }
+
+    /// ホーム → 検索結果 → 絞り込み → 詳細 → 保存 → 保存タブ、の順に撮る。
+    /// 保存はテストが足した分だけ最後に外す（端末にある保存の一覧を変えないため）。
     @MainActor
-    func testMainScreens() {
+    private func run(_ scheme: String) {
         let app = XCUIApplication()
+        app.launchArguments = ["-uiTestScheme", scheme]
         app.launch()
         sleep(3)
-        shot("1-home")
+        shot("\(scheme)-1-home")
 
-        // エリアのボタンから検索する。
         let area = app.buttons["谷中"]
         if area.waitForExistence(timeout: 5) { area.tap() }
         sleep(6)
-        shot("2-results")
+        shot("\(scheme)-2-results")
 
-        // 一覧の 1 軒目を開く。
+        let openNow = app.buttons["営業中"]
+        if openNow.exists { openNow.tap(); sleep(1) }
+        shot("\(scheme)-3-filtered")
+        if openNow.exists { openNow.tap(); sleep(1) }
+
         let firstRow = app.scrollViews.buttons.element(boundBy: 6)
         if firstRow.exists { firstRow.tap() }
         sleep(4)
-        shot("3-detail")
+
+        let save = app.buttons["保存"]
+        let savedByTest = save.exists
+        if savedByTest { save.tap(); sleep(1) }
+        shot("\(scheme)-4-detail-saved")
 
         app.swipeUp()
         sleep(1)
-        shot("4-detail-scrolled")
+        shot("\(scheme)-5-detail-scrolled")
+
+        let back = app.buttons["一覧に戻る"]
+        app.swipeDown()
+        if back.waitForExistence(timeout: 2) { back.tap(); sleep(1) }
+        let savedTab = app.segmentedControls.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "保存")).firstMatch
+        if savedTab.exists { savedTab.tap(); sleep(2) }
+        shot("\(scheme)-6-saved-tab")
+
+        if savedByTest {
+            let searchTab = app.segmentedControls.buttons["さがす"]
+            if searchTab.exists { searchTab.tap(); sleep(1) }
+            if firstRow.exists { firstRow.tap(); sleep(2) }
+            let unsave = app.buttons["保存済み"]
+            if unsave.waitForExistence(timeout: 3) { unsave.tap(); sleep(1) }
+        }
+        // 後始末のあと。テストが足した保存が残っていないことを確かめる。
+        if back.waitForExistence(timeout: 2) { back.tap(); sleep(1) }
+        if savedTab.exists { savedTab.tap(); sleep(1) }
+        shot("\(scheme)-7-after-cleanup")
     }
 }

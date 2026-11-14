@@ -346,9 +346,9 @@ struct CafeRow: View {
                     Text(cafe.name).font(.body.weight(.medium)).lineLimit(2)
                     Spacer(minLength: 4)
                     if let status = model.status(of: cafe) {
-                        Text(status == "visited" ? "訪問済み" : "行きたい").font(.caption2.weight(.medium))
-                            .padding(.horizontal, 6).padding(.vertical, 3)
-                            .background((status == "visited" ? Brand.green : Brand.hibiscus).opacity(0.14), in: .capsule)
+                        // 薄い色面はガラス越しの地図と混ざって読めないので、印と文字だけにする。
+                        Label(status == "visited" ? "訪問済み" : "行きたい", systemImage: status == "visited" ? "checkmark.circle.fill" : "bookmark.fill")
+                            .font(.caption.weight(.medium)).labelStyle(.titleAndIcon)
                             .foregroundStyle(status == "visited" ? Brand.green : Brand.hibiscus)
                     }
                 }

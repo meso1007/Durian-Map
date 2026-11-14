@@ -9,11 +9,21 @@ import UIKit
 struct DurianMapApp: App {
     @State private var model = AppModel()
 
+    private static var forcedScheme: ColorScheme? {
+        switch UserDefaults.standard.string(forKey: "uiTestScheme") {
+        case "light": .light
+        case "dark": .dark
+        default: nil
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(model)
                 .tint(Brand.green)
+                // UI テストから見た目を固定するための引数（-uiTestScheme light / dark）。通常は端末の設定に従う。
+                .preferredColorScheme(Self.forcedScheme)
         }
     }
 }
