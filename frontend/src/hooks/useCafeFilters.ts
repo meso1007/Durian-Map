@@ -38,7 +38,8 @@ export function useCafeFilters({
     const toggleSort = useCallback(() => setSortByDistance((value) => !value), []);
     const togglePrice = useCallback(
         (id: PriceFilterId) =>
-            setPriceFilters((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id])),
+            // 価格帯は 1 つだけ選べる。選んでいるものをもう一度押すと外れる。
+            setPriceFilters((prev) => (prev.includes(id) ? [] : [id])),
         [],
     );
 

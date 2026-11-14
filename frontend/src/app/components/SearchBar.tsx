@@ -22,6 +22,8 @@ type Props = {
   emphasizeLocate: boolean;
   onLocate: () => void;
   onSearch: (area: string) => void;
+  /** ロゴを押したとき。検索と選択を解いて最初の画面へ戻る。 */
+  onHome: () => void;
 };
 
 /**
@@ -39,6 +41,7 @@ export default function SearchBar({
   emphasizeLocate,
   onLocate,
   onSearch,
+  onHome,
 }: Props) {
   const [value, setValue] = useState(area);
 
@@ -88,11 +91,19 @@ export default function SearchBar({
         表示テキストは "urian Map"、読み上げは aria-label で "Durian Map" にする。
         モバイルでは検索欄の左のマークがその役を持つ（h1 は Welcome 側に置かない: 1 画面 1 つ）。
       */}
-      <h1 className="sr-only md:not-sr-only md:mb-3 md:flex md:items-center" aria-label="Durian Map">
-        <BrandMark tone="dark" className="hidden h-11 w-11 shrink-0 md:block" />
-        <span aria-hidden className="hidden font-display text-2xl font-bold leading-none text-cream md:-ml-1 md:block">
-          urian Map
-        </span>
+      <h1 className="sr-only md:not-sr-only md:mb-3 md:flex">
+        {/* ロゴは「最初の画面に戻る」ボタン。押すとマークが 1 回まわる。 */}
+        <button
+          type="button"
+          onClick={onHome}
+          aria-label="Durian Map（最初の画面に戻る）"
+          className="group hidden items-center rounded-lg outline-lime md:flex"
+        >
+          <BrandMark tone="dark" className="h-11 w-11 shrink-0 transition-transform duration-[var(--dm-duration-slow)] ease-out group-active:rotate-[360deg]" />
+          <span aria-hidden className="-ml-1 font-display text-2xl font-bold leading-none text-cream">
+            urian Map
+          </span>
+        </button>
       </h1>
 
       <form
@@ -103,7 +114,14 @@ export default function SearchBar({
         }}
         className="relative flex h-14 items-center gap-1 rounded-2xl bg-surface pl-2 pr-2 md:rounded-[10px] shadow-float outline-offset-2 outline-primary has-[input:focus-visible]:outline-2 md:shadow-none md:outline-lime"
       >
-        <BrandMark className="h-9 w-9 shrink-0 md:hidden" />
+        <button
+          type="button"
+          onClick={onHome}
+          aria-label="最初の画面に戻る"
+          className="group flex h-11 w-10 shrink-0 items-center justify-center rounded-lg md:hidden"
+        >
+          <BrandMark className="h-9 w-9 transition-transform duration-[var(--dm-duration-slow)] ease-out group-active:rotate-[360deg]" />
+        </button>
         <SearchIcon className="ml-2 hidden h-5 w-5 shrink-0 text-text-muted md:block" />
 
         {/* text-base（16px）は iOS の自動ズーム対策。これ未満にしないこと（docs/design.md 6節）。 */}

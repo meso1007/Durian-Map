@@ -24,26 +24,15 @@ export default function Welcome({
   const popular = POPULAR_AREAS.filter((name) => !recentAreas.includes(name));
 
   return (
-    <div className="dm-scroll @container flex-1 animate-rise overflow-y-auto px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-1 md:px-6 md:pt-3">
-      {/*
-        コピーをこの画面の主役にする。2 行とも幅いっぱいに使う大きさで、行の途中では折り返させない
-        （「チェーンじゃな / い、」のように割れると台無しになる）。幅は cqi（パネルの幅）に合わせる。
-      */}
-      <h2 className="whitespace-nowrap font-bold leading-[1.12] tracking-[-0.02em] text-text">
-        <span className="block text-[min(10.4cqi,42px)]">チェーンじゃない、</span>
-        {/* 2 行目を主役にする。5 文字なので、同じ幅を使うと 1 行目の 1.8 倍の大きさになる。 */}
-        <span className="block text-[min(18.6cqi,74px)]">あの一杯へ</span>
-      </h2>
-
-      <p className="mt-3 text-sm leading-[1.6] text-text-muted">
-        大手チェーンを除いた、個人経営のカフェの地図
-      </p>
+    <div className="dm-scroll flex-1 animate-rise overflow-y-auto px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-1 md:px-6 md:pt-3">
+      {/* 見出しは読み上げ用だけ。キャッチコピーは置かない（2026-11-14 の指摘 / tasks/lessons.md）。 */}
+      <h2 className="sr-only">カフェをさがす</h2>
 
       <button
         type="button"
         onClick={onLocate}
         disabled={isLocating}
-        className="mt-4 flex min-h-14 w-full items-center gap-3 rounded-xl bg-cta px-4 text-left text-text transition-transform duration-[var(--dm-duration-fast)] active:scale-[0.98] disabled:opacity-60"
+        className="flex min-h-14 w-full items-center gap-3 rounded-xl bg-cta px-4 text-left text-text transition-transform duration-[var(--dm-duration-fast)] active:scale-[0.98] disabled:opacity-60"
       >
         <span className="shrink-0">{isLocating ? <LoadingSpinner /> : <TargetIcon />}</span>
         <span className="min-w-0 flex-1 text-base font-medium">{isLocating ? '現在地を取得中…' : '近くからさがす'}</span>

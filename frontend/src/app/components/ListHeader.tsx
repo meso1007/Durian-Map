@@ -70,11 +70,6 @@ export default function ListHeader({
         )}
       </div>
 
-      {/* このアプリが何を出しているかを、結果の上でも言う（初回表示を見ていない人にも伝わるように）。 */}
-      {tab === 'search' && showFilters && (
-        <p className="-mt-1 mb-2 px-5 text-xs text-text-muted md:px-6">チェーン店を除いた、個人経営のカフェ</p>
-      )}
-
       {tab === 'search' && showFilters && (
         <div role="group" aria-label="絞り込み" className="no-scrollbar flex gap-2 overflow-x-auto px-5 py-1 md:px-6">
           <Chip active={openNowOnly} onClick={onToggleOpenNow}>

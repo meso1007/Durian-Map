@@ -14,10 +14,11 @@ import { useCurrentLocation } from '@/hooks/useCurrentLocation';
 import { useMapSelection, useSelectedCafe } from '@/hooks/useMapSelection';
 import { useRecentAreas } from '@/hooks/useRecentAreas';
 import { useSavedCafes } from '@/hooks/useSavedCafes';
-import { areaQuery, buildCafeShareUrl, useInitialSearchUrl, useRestoreSearchFromUrl, useSearchUrlState } from '@/hooks/useSearchUrlState';
+import { areaQuery, buildCafeShareUrl, buildShareUrl, useInitialSearchUrl, useRestoreSearchFromUrl, useSearchUrlState } from '@/hooks/useSearchUrlState';
 import { useToast } from '@/hooks/useToast';
 import { useViewport } from '@/hooks/useViewport';
 
+import AskAi from './components/AskAi';
 import MapArea from './components/MapArea';
 import Panel from './components/Panel';
 import SearchBar from './components/SearchBar';
@@ -34,7 +35,7 @@ import type { TabId } from './components/ViewSwitch';
  */
 function CafeFinderContent() {
   const { toast, showError, showNotice, dismissToast } = useToast();
-  const { state: searchState, query, search, completedCount, results, isLoading, hasSearched } = useCafeSearch(showError);
+  const { state: searchState, query, search, reset: resetSearch, completedCount, results, isLoading, hasSearched } = useCafeSearch(showError);
 
   // URL を状態の正にする。マウント時の URL が初期状態になり、以降は状態が変わるたびに
   // 書き戻す（リロードでも共有リンクでも同じ画面に戻る）。
@@ -43,7 +44,10 @@ function CafeFinderContent() {
   const [snap, setSnap] = useState<SheetSnap>('half');
 
   const { selectedId, listRef, select, clear, dismiss } = useMapSelection(initialUrl.cafeId);
-  const urlState = { tab, query: query ?? initialUrl.query, cafeId: selectedId };
+  // ホームへ戻ったあとは、開いたときの URL の検索条件を引き継がない。
+  const [wentHome, setWentHome] = useState(false);
+  const fallbackQuery = wentHome ? null : initialUrl.query;
+  const urlState = { tab, query: query ?? fallbackQuery, cafeId: selectedId };
 
   useSearchUrlState(urlState);
   useRestoreSearchFromUrl(initialUrl, search);
@@ -92,7 +96,7 @@ function CafeFinderContent() {
     : null;
 
   // 検索欄に出すエリア名。現在地からの検索に切り替えたら空にする（前のエリア名を残さない）。
-  const shownQuery = query ?? initialUrl.query;
+  const shownQuery = query ?? fallbackQuery;
   const searchArea = shownQuery?.kind === 'area' ? shownQuery.area : '';
   const searchTitle = query?.kind === 'nearby' ? 'この辺りのカフェ' : searchArea ? `${searchArea}のカフェ` : 'カフェ';
 
@@ -169,6 +173,15 @@ function CafeFinderContent() {
     [select],
   );
 
+  /** ロゴを押した。検索と選択を解いて、最初の画面へ戻る。 */
+  const goHome = useCallback(() => {
+    clear();
+    resetSearch();
+    setWentHome(true);
+    setTab('search');
+    setSnap('half');
+  }, [clear, resetSearch]);
+
   const handleTabChange = useCallback(
     (next: TabId) => {
       // タブを跨いで選択を持ち越すと、詳細だけ前のタブのものが残る。
@@ -209,6 +222,17 @@ function CafeFinderContent() {
         onError={showError}
       />
 
+      <AskAi
+        insets={insets}
+        onNotify={showNotice}
+        context={{
+          url: buildShareUrl(urlState) ?? 'https://durian-map.pages.dev/',
+          title: tab === 'saved' ? '保存したカフェ' : hasSearched ? searchTitle : null,
+          cafes: filters.cafes,
+          selected: selectedCafe,
+        }}
+      />
+
       {/*
         地図の上に浮く UI。モバイルでは検索バー（上）とシート（下）が別々に浮き、
         PC では左の列に縦につながって 1 枚の面になる。列そのものは地図の操作を邪魔しない（pointer-events-none）。
@@ -224,6 +248,7 @@ function CafeFinderContent() {
           emphasizeLocate={tab === 'search' && selectedCafe === null}
           onLocate={locate}
           onSearch={(area) => startSearch({ kind: 'area', area })}
+          onHome={goHome}
         />
 
         <Sheet

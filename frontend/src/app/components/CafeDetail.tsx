@@ -215,7 +215,7 @@ export default function CafeDetail({
             type="button"
             onClick={onToggleSave}
             aria-pressed={isSaved}
-            className={`flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-[10px] border px-4 text-sm font-medium transition-colors duration-[var(--dm-duration-fast)] ${isSaved ? 'border-accent bg-accent-soft text-accent-text' : 'border-border bg-surface text-text hover:border-primary'}`}
+            className={`flex h-12 w-[7.25rem] shrink-0 items-center justify-center gap-1.5 rounded-[10px] border text-sm font-medium transition-colors duration-[var(--dm-duration-fast)] ${isSaved ? 'border-accent bg-accent-soft text-accent-text' : 'border-border bg-surface text-text hover:border-primary'}`}
           >
             <BookmarkIcon key={String(isSaved)} filled={isSaved} className={`h-5 w-5 ${isSaved ? 'animate-bump' : ''}`} />
             {isSaved ? '保存済み' : '保存'}
@@ -231,27 +231,7 @@ export default function CafeDetail({
           </button>
         </div>
 
-        {/*
-          「行きたい / 訪問済み」。保存していないカフェに状態は無いので、保存後だけ出す。
-          押せるのに効かない UI を作らないため（docs/design.md 1節）。
-        */}
-        {isSaved && (
-          <div role="group" aria-label="保存した状態" className="mt-2 grid animate-fade grid-cols-2 gap-1 rounded-xl bg-surface-sunken p-1">
-            {SAVED_STATUSES.map(({ id, label }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => onSetStatus(id)}
-                aria-pressed={savedStatus === id}
-                className={`h-11 rounded-lg text-sm font-medium transition-colors duration-[var(--dm-duration-fast)] ${savedStatus === id ? 'bg-primary-deepest text-cream' : 'text-text-muted hover:text-text'}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {weekHours && <WeekHours rows={weekHours} />}
+        {weekHours && <WeekHours rows={weekHours} now={now} />}
 
         {/* 情報行。値が取れないフィールドは行ごと出さない。 */}
         <div className="mt-5 divide-y divide-border border-y border-border">
@@ -271,6 +251,27 @@ export default function CafeDetail({
             </InfoRow>
           )}
         </div>
+        {/*
+          「行きたい / 訪問済み」。保存していないカフェに状態は無いので、保存後だけ出す。
+          押せるのに効かない UI を作らないため（docs/design.md 1節）。
+          いちばん下に置く: 保存を押した瞬間に、ボタンや営業時間が下へ押し出されないようにするため。
+        */}
+        {isSaved && (
+          <div role="group" aria-label="保存した状態" className="mt-5 grid animate-fade grid-cols-2 gap-1 rounded-xl bg-surface-sunken p-1">
+            {SAVED_STATUSES.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onSetStatus(id)}
+                aria-pressed={savedStatus === id}
+                className={`h-11 rounded-lg text-sm font-medium transition-colors duration-[var(--dm-duration-fast)] ${savedStatus === id ? 'bg-primary-deepest text-cream' : 'text-text-muted hover:text-text'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
       </div>
     </article>
   );

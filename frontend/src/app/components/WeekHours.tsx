@@ -3,144 +3,154 @@
 import { useMemo, useState } from 'react';
 
 import { parseHourRanges } from '@/lib/cafe';
-import type { DayHours } from '@/lib/cafe';
+import type { DayHours, HourRange } from '@/lib/cafe';
 
-/**
- * 軸の既定の範囲（6:00–24:00）。どの店も同じ軸に載せるので、朝の店は柱が上に、夜の店は下に寄り、
- * 柱の位置と長さがその店の形になる。店ごとに軸を合わせると、毎日同じ時間の店は 7 本とも
- * 端から端まで塗られて、何も伝わらない。
- */
-const BASE_AXIS = { start: 6 * 60, end: 24 * 60 };
+/** 文字盤の寸法（viewBox 200×200）。 */
+const CENTER = 100;
+const RING_RADIUS = 76;
+const RING_WIDTH = 16;
+const DAY_MINUTES = 1440;
 
 /** いまの時刻（JST、0:00 からの分）。端末のタイムゾーンに関係なく JST で出す。 */
-function getJstMinutes(now: Date): number {
-  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+function getJstMinutes(now: number): number {
+  const jst = new Date(now + 9 * 60 * 60 * 1000);
   return jst.getUTCHours() * 60 + jst.getUTCMinutes();
 }
 
-/** 目盛りの表記（時だけ）。24 時を超える分は折り返す（27 時 → 3）。24 時ちょうどは 24 のまま。 */
-function formatAxisTime(minutes: number): string {
-  const hour = minutes / 60;
-  return String(hour > 24 ? hour - 24 : hour);
+/** 24 時間で 1 周する文字盤の上の点。0 時が真上、時計回り。 */
+function pointAt(minutes: number, radius: number): { x: number; y: number } {
+  const angle = ((minutes % DAY_MINUTES) / DAY_MINUTES) * Math.PI * 2;
+  return { x: CENTER + radius * Math.sin(angle), y: CENTER - radius * Math.cos(angle) };
 }
 
+/** 開いている時間帯の弧。日をまたぐ営業（end が 24 時を超える）は、そのまま 0 時をまたいで描く。 */
+function arcPath({ start, end }: HourRange): string {
+  const length = Math.min(end - start, DAY_MINUTES);
+  // ちょうど 1 周は始点と終点が重なって描けないので、わずかに手前で止める。
+  const stop = start + (length >= DAY_MINUTES ? DAY_MINUTES - 0.5 : length);
+  const from = pointAt(start, RING_RADIUS);
+  const to = pointAt(stop, RING_RADIUS);
+
+  return `M ${from.x} ${from.y} A ${RING_RADIUS} ${RING_RADIUS} 0 ${length > DAY_MINUTES / 2 ? 1 : 0} 1 ${to.x} ${to.y}`;
+}
+
+const HOUR_MARKS = [0, 6, 12, 18];
+
 /**
- * 1 週間の営業時間。曜日ごとに 1 本の柱を立て、開いている時間帯を塗る。
+ * 営業時間を、24 時間で 1 周する時計の文字盤で出す。
  *
- * 7 行の表だと「毎日 10:00–19:00」のような店でも同じ行が 7 回並び、詳細の半分を占めてしまう。
- * 柱にすると、定休日・昼休み・深夜営業・週末だけ遅い、といった違いがひと目で分かる。
- * 柱を押すとその曜日の時刻を文字で出す（初期表示は今日）。
+ * 輪の塗ってある所が開いている時間、針が「いま」。朝の店は右上、夜の店は左側が塗られ、
+ * 深夜営業は 0 時をまたいで続く — 文字で読まなくても、その店が「いつの店か」が形で分かる。
+ * 下の曜日を押すと、その曜日の文字盤に切り替わる（初期表示は今日）。
  * → docs/design.md 5節「詳細」
  */
-export default function WeekHours({ rows }: { rows: DayHours[] }) {
+export default function WeekHours({ rows, now }: { rows: DayHours[]; now: number }) {
   const todayIndex = Math.max(0, rows.findIndex((row) => row.isToday));
   const [selectedIndex, setSelectedIndex] = useState(todayIndex);
 
   const days = useMemo(() => rows.map((row) => ({ ...row, ranges: parseHourRanges(row.hours) })), [rows]);
-
-  // 軸は共通。6 時より早く開く店・24 時を過ぎて閉める店のときだけ、その分を広げる（時単位）。
-  const axis = useMemo(() => {
-    const all = days.flatMap((day) => day.ranges);
-
-    return {
-      start: Math.min(BASE_AXIS.start, ...all.map((range) => Math.floor(range.start / 60) * 60)),
-      end: Math.max(BASE_AXIS.end, ...all.map((range) => Math.ceil(range.end / 60) * 60)),
-    };
-  }, [days]);
-
-  // 目盛りは 6 時間おき（6 / 12 / 18 / 24 …）。
-  const ticks = useMemo(() => {
-    const values: number[] = [];
-    for (let minutes = Math.ceil(axis.start / 360) * 360; minutes <= axis.end; minutes += 360) values.push(minutes);
-
-    // 深夜まで広げた軸は、端の時刻も出す（24 の先に何時まで続くのかが分かるように）。
-    // 直前の目盛りと近すぎるときは重なるので出さない。
-    if (axis.end - values[values.length - 1] >= 120) values.push(axis.end);
-    return values;
-  }, [axis]);
-
-  const span = Math.max(axis.end - axis.start, 60);
-  const position = (minutes: number) => `${((minutes - axis.start) / span) * 100}%`;
-
-  // 「いま」の線。深夜営業の店では、日付が変わったあとの時刻を 24 時以降として軸に載せる。
-  const [nowMinutes] = useState(() => getJstMinutes(new Date()));
-  const nowOnAxis = nowMinutes < axis.start && nowMinutes + 1440 <= axis.end ? nowMinutes + 1440 : nowMinutes;
-  const showNow = nowOnAxis >= axis.start && nowOnAxis <= axis.end;
-
   const selected = days[selectedIndex];
+
+  const nowMinutes = getJstMinutes(now);
+  const hand = pointAt(nowMinutes, RING_RADIUS - RING_WIDTH / 2 - 6);
 
   return (
     <section className="mt-6" aria-label="営業時間">
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-xs font-medium text-text-muted">営業時間</h3>
-        {/* 選んだ曜日の時刻。柱を押すたびに読み上げる。 */}
-        <p aria-live="polite" className="text-sm font-medium text-text">
-          {selected.day}曜
-          {selected.isToday && <span className="font-medium text-text-muted">（今日）</span>}
-          <span className={`ml-2 ${selected.isClosed ? '' : 'num'}`}>{selected.hours}</span>
+      <h3 className="text-xs text-text-muted">営業時間</h3>
+
+      <div className="mt-2 flex items-center gap-5">
+        <svg viewBox="0 0 200 200" className="h-36 w-36 shrink-0" aria-hidden focusable="false">
+          {/* 輪（1 日）。 */}
+          <circle cx={CENTER} cy={CENTER} r={RING_RADIUS} fill="none" strokeWidth={RING_WIDTH} className="stroke-surface-sunken" />
+
+          {/* 開いている時間帯。 */}
+          {selected.ranges.map((range) => (
+            <path
+              key={range.start}
+              d={arcPath(range)}
+              fill="none"
+              strokeWidth={RING_WIDTH}
+              strokeLinecap="round"
+              className={selected.isToday ? 'stroke-primary' : 'stroke-primary-soft'}
+            />
+          ))}
+
+          {/* 1 時間ごとの目盛りと、6 時間ごとの数字。 */}
+          {Array.from({ length: 24 }, (_, hour) => {
+            const outer = pointAt(hour * 60, RING_RADIUS - RING_WIDTH / 2 - 3);
+            const inner = pointAt(hour * 60, RING_RADIUS - RING_WIDTH / 2 - (hour % 6 === 0 ? 9 : 6));
+            return (
+              <line
+                key={hour}
+                x1={outer.x}
+                y1={outer.y}
+                x2={inner.x}
+                y2={inner.y}
+                strokeWidth={hour % 6 === 0 ? 2 : 1}
+                strokeLinecap="round"
+                className="stroke-border"
+              />
+            );
+          })}
+          {HOUR_MARKS.map((hour) => {
+            const position = pointAt(hour * 60, RING_RADIUS - RING_WIDTH / 2 - 21);
+            return (
+              <text
+                key={hour}
+                x={position.x}
+                y={position.y}
+                textAnchor="middle"
+                dominantBaseline="central"
+                className="num fill-text-muted text-[13px]"
+              >
+                {hour}
+              </text>
+            );
+          })}
+
+          {/* 針（いま）。今日の文字盤にだけ出す。 */}
+          {selected.isToday && (
+            <>
+              <line x1={CENTER} y1={CENTER} x2={hand.x} y2={hand.y} strokeWidth={3} strokeLinecap="round" className="stroke-cta-deep" />
+              <circle cx={CENTER} cy={CENTER} r={5} className="fill-cta-deep" />
+            </>
+          )}
+          {!selected.isToday && <circle cx={CENTER} cy={CENTER} r={3} className="fill-border" />}
+        </svg>
+
+        {/* 選んだ曜日の時刻。曜日を押すたびに読み上げる。 */}
+        <p aria-live="polite" className="min-w-0 text-sm text-text-muted">
+          <span className="block">
+            {selected.day}曜日
+            {selected.isToday && '（今日）'}
+          </span>
+          <span className={`mt-1 block text-base font-medium text-text ${selected.isClosed ? '' : 'num'}`}>
+            {selected.hours.split('、').map((part) => (
+              <span key={part} className="block">
+                {part}
+              </span>
+            ))}
+          </span>
         </p>
       </div>
 
-      <div className="mt-3 flex gap-2">
-        {/* 軸の目盛り。上が開店側、下が閉店側。 */}
-        <div aria-hidden className="num relative h-24 w-6 shrink-0 text-right text-xs leading-none text-text-muted">
-          {ticks.map((minutes) => (
-            <span key={minutes} className="absolute right-0 -translate-y-1/2" style={{ top: position(minutes) }}>
-              {formatAxisTime(minutes)}
-            </span>
-          ))}
-        </div>
-
-        <div className="relative grid min-w-0 flex-1 grid-cols-7 gap-1.5">
-          {/* 日付が変わる位置。深夜営業の店で、柱が 24 時の先まで伸びている理由が分かるようにする。 */}
-          {axis.end > 1440 && (
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-x-0 z-10 h-px bg-border"
-              style={{ top: `calc(6rem * ${(1440 - axis.start) / span})` }}
-            />
-          )}
-          {days.map((day, index) => {
-            const isSelected = index === selectedIndex;
-
-            return (
-              <button
-                key={day.day}
-                type="button"
-                onClick={() => setSelectedIndex(index)}
-                aria-pressed={isSelected}
-                aria-label={`${day.day}曜日${day.isToday ? '（今日）' : ''} ${day.hours}`}
-                className="group flex flex-col items-center gap-1.5 rounded-lg pb-1"
-              >
-                <span
-                  className={`relative block h-24 w-full overflow-hidden rounded-lg transition-colors duration-[var(--dm-duration-fast)] ${day.isToday ? 'bg-success-soft' : 'bg-surface-sunken'} ${isSelected ? 'outline-2 outline-offset-1 outline-primary-deepest' : 'group-hover:outline-1 group-hover:outline-border'}`}
-                >
-                  {day.ranges.map((range) => (
-                    <span
-                      key={range.start}
-                      className={`absolute inset-x-1.5 rounded-[5px] ${day.isToday ? 'bg-primary-deepest' : 'bg-primary-soft'}`}
-                      style={{ top: position(range.start), bottom: `calc(100% - ${position(range.end)})` }}
-                    />
-                  ))}
-
-                  {day.ranges.length === 0 && (
-                    <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-text-muted">
-                      休
-                    </span>
-                  )}
-
-                  {day.isToday && showNow && (
-                    <span className="absolute inset-x-0 h-0.5 -translate-y-1/2 bg-cta" style={{ top: position(nowOnAxis) }} />
-                  )}
-                </span>
-
-                <span className={`text-xs leading-none ${day.isToday ? 'font-medium text-text' : 'text-text-muted'}`}>
-                  {day.day}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+      <div role="group" aria-label="曜日" className="mt-3 grid grid-cols-7 gap-1 rounded-xl bg-surface-sunken p-1">
+        {days.map((day, index) => (
+          <button
+            key={day.day}
+            type="button"
+            onClick={() => setSelectedIndex(index)}
+            aria-pressed={index === selectedIndex}
+            aria-label={`${day.day}曜日${day.isToday ? '（今日）' : ''} ${day.hours}`}
+            className={`relative h-11 rounded-lg text-sm transition-colors duration-[var(--dm-duration-fast)] ${index === selectedIndex ? 'bg-primary-deepest font-medium text-cream' : day.ranges.length === 0 ? 'text-text-muted/60 hover:text-text' : 'text-text-muted hover:text-text'}`}
+          >
+            {day.day}
+            {/* 今日の印。 */}
+            {day.isToday && (
+              <span className={`absolute bottom-1.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full ${index === selectedIndex ? 'bg-lime' : 'bg-cta-deep'}`} />
+            )}
+          </button>
+        ))}
       </div>
     </section>
   );

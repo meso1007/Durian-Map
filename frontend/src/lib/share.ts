@@ -46,3 +46,16 @@ export async function shareUrl(options: { title: string; url: string }): Promise
         return 'failed';
     }
 }
+
+/**
+ * 文字列をクリップボードへ入れる。成功したかどうかを返す（呼び出し側がトーストで伝える）。
+ * iOS の WebView でも navigator.clipboard は使える（ユーザー操作の中で呼ぶこと）。
+ */
+export async function copyText(text: string): Promise<boolean> {
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch {
+        return false;
+    }
+}

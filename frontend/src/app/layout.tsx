@@ -30,8 +30,8 @@ const coHeadline = localFont({
   ],
 });
 
-const TITLE = "Durian Map｜チェーンじゃない、あの一杯へ。";
-const DESCRIPTION = "大手チェーンを除いて、個人経営の小さなカフェだけを地図でさがせます。近くのカフェも、気になる街のカフェも。";
+const TITLE = "Durian Map";
+const DESCRIPTION = "個人経営のカフェを地図でさがせます。大手チェーンは表示しません。";
 
 export const metadata: Metadata = {
   // 共有リンクの土台。OG の URL を絶対パスにするために要る。
