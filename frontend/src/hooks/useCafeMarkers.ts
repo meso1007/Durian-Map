@@ -145,7 +145,10 @@ export function useCafeMarkers({
 
             entry.marker.addListener('click', () => onSelectRef.current(cafe.id));
             entries.set(cafe.id, entry);
-            added.push(entry.marker);
+
+            // 選択中のピンはクラスタに入れず、地図へ直接置く（下の「選択とホバーの切り替え」を参照）。
+            if (entry.state === 'selected') entry.marker.setMap(map);
+            else added.push(entry.marker);
         });
 
         if (removed.length > 0) {
@@ -162,18 +165,36 @@ export function useCafeMarkers({
         if (!isLoaded) return;
 
         const sync = () => {
+            const clusterer = clustererRef.current;
+            let clusterChanged = false;
+
             entriesRef.current.forEach((entry, id) => {
                 const next = stateOf(id);
                 if (entry.state === next) return;
 
+                // 選択中のピンはクラスタから外して、地図へ直接置く。クラスタに入れたままだと、
+                // 近くの店と 1 つの丸にまとめられ、選んだ店がどれか分からなくなる。
+                if (clusterer && map && (entry.state === 'selected') !== (next === 'selected')) {
+                    if (next === 'selected') {
+                        clusterer.removeMarker(entry.marker, true);
+                        entry.marker.setMap(map);
+                    } else {
+                        entry.marker.setMap(null);
+                        clusterer.addMarker(entry.marker, true);
+                    }
+                    clusterChanged = true;
+                }
+
                 entry.state = next;
                 paint(entry);
             });
+
+            if (clusterChanged) clusterer?.render();
         };
 
         selectedIdRef.current = selectedId;
         sync();
 
         return subscribeHoveredCafe(sync);
-    }, [selectedId, cafes, isLoaded]);
+    }, [selectedId, cafes, isLoaded, map]);
 }
