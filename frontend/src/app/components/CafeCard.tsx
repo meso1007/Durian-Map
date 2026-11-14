@@ -4,17 +4,18 @@ import { memo } from 'react';
 
 import { getCafePhotoUrl } from '@/lib/api';
 import type { Cafe } from '@/lib/api';
-import { formatAddress, getOpenStatusLabel } from '@/lib/cafe';
+import { formatAddress, getMinutesUntilClose, getOpenStatusLabel } from '@/lib/cafe';
 import { formatDistance, formatWalkingMinutes } from '@/lib/geo';
 import { setHoveredCafe } from '@/lib/hoverStore';
 import type { SavedStatus } from '@/lib/storage';
 
 import { BookmarkIcon, CheckIcon, CupIcon, StarIcon } from './icons';
+import Photo from './Photo';
 
 type Props = {
   cafe: Cafe;
   distance: number | null;
-  /** 保存済みなら状態。未保存なら undefined。 */
+  /** 保存済みなら状態。未保存なら undefined（バッジを出さない）。 */
   savedStatus?: SavedStatus;
   /** 一覧の何番目か。出現をずらすのに使う（先頭 8 枚まで）。 */
   index: number;
@@ -30,6 +31,10 @@ type Props = {
 function CafeCard({ cafe, distance, savedStatus, index, onSelect }: Props) {
   const photoUrl = getCafePhotoUrl(cafe, 200);
   const openStatus = getOpenStatusLabel(cafe);
+
+  // 閉店まで 1 時間を切っていたら、時刻ではなく残り時間で伝える。
+  const minutesLeft = cafe.openNow ? getMinutesUntilClose(cafe.closesAt) : null;
+  const closingSoon = minutesLeft !== null && minutesLeft <= 60;
 
   return (
     <button
@@ -47,27 +52,18 @@ function CafeCard({ cafe, distance, savedStatus, index, onSelect }: Props) {
       className="group flex w-full shrink-0 animate-rise items-center gap-3.5 rounded-[20px] p-2 text-left transition-colors duration-[var(--dm-duration-fast)] hover:bg-surface-sunken active:bg-surface-sunken"
     >
       {/* 写真 88x88 / 角丸 16px */}
-      <div className="relative flex h-[88px] w-[88px] shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-surface-sunken text-text-muted">
-        {photoUrl ? (
-          // 写真は Worker の /api/photo 経由（署名付き）。最適化サーバーは無いので img をそのまま使う。
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={photoUrl}
-            alt=""
-            width={88}
-            height={88}
-            loading="lazy"
-            decoding="async"
-            className="h-full w-full object-cover transition-transform duration-[var(--dm-duration-slow)] ease-out group-hover:scale-105"
-          />
-        ) : (
-          <CupIcon className="h-7 w-7" />
-        )}
+      <div data-photo className="relative flex h-[88px] w-[88px] shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-surface-sunken text-text-muted">
+        <Photo
+          src={photoUrl}
+          alt=""
+          className="transition-transform duration-[var(--dm-duration-slow)] group-hover:scale-105"
+          fallback={<CupIcon className="h-7 w-7" />}
+        />
       </div>
 
       <div className="min-w-0 flex-1 py-0.5">
         <div className="flex items-start gap-2">
-          <h3 className="line-clamp-2 min-w-0 flex-1 text-base font-bold leading-[1.4] text-text">{cafe.name}</h3>
+          <h3 className="font-display line-clamp-2 min-w-0 flex-1 text-base font-bold leading-[1.4] text-text">{cafe.name}</h3>
 
           {savedStatus && (
             <span
@@ -107,10 +103,18 @@ function CafeCard({ cafe, distance, savedStatus, index, onSelect }: Props) {
           時刻はサーバーがレスポンス時に JST で計算した値（closesAt / opensAt）。
         */}
         {cafe.openNow !== undefined && (
-          <p className={`mt-1 flex items-center gap-1.5 text-xs font-medium ${cafe.openNow ? 'text-success-text' : 'text-accent-text'}`}>
-            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${cafe.openNow ? 'bg-success' : 'bg-accent'}`} />
-            {cafe.openNow ? '営業中' : '営業時間外'}
-            {openStatus && (
+          <p className={`mt-1 flex items-center gap-1.5 text-[13px] font-medium ${cafe.openNow && !closingSoon ? 'text-success-text' : 'text-accent-text'}`}>
+            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${cafe.openNow && !closingSoon ? 'bg-success' : 'bg-accent'}`} />
+            {closingSoon ? (
+              <span>
+                あと<span className="num">{minutesLeft}</span>分で閉店
+              </span>
+            ) : cafe.openNow ? (
+              '営業中'
+            ) : (
+              '営業時間外'
+            )}
+            {openStatus && !closingSoon && (
               <span className="font-normal text-text-muted">
                 <span className="num">{openStatus.value}</span>
                 {openStatus.suffix}

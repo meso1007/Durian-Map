@@ -53,7 +53,7 @@ export default function ListHeader({
   return (
     <div className="shrink-0 pb-2">
       <div className="flex min-h-11 items-center gap-3 px-5 md:px-6">
-        <h2 className="min-w-0 flex-1 truncate text-xl font-bold leading-[1.4] text-text">
+        <h2 className="min-w-0 flex-1 truncate text-[22px] font-bold leading-[1.4] text-text">
           {title}
           {count !== null && (
             <span className="ml-2 text-sm font-medium text-text-muted">
@@ -69,6 +69,11 @@ export default function ListHeader({
           </Chip>
         )}
       </div>
+
+      {/* このアプリが何を出しているかを、結果の上でも言う（初回表示を見ていない人にも伝わるように）。 */}
+      {tab === 'search' && showFilters && (
+        <p className="-mt-1 mb-2 px-5 text-xs text-text-muted md:px-6">チェーン店を除いた、個人経営のカフェ</p>
+      )}
 
       {tab === 'search' && showFilters && (
         <div role="group" aria-label="絞り込み" className="no-scrollbar mt-1 flex gap-2 overflow-x-auto px-5 md:px-6">

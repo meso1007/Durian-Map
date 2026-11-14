@@ -6,7 +6,7 @@ import type { Cafe, Coordinates } from '@/lib/api';
 import { getHoveredCafe, setHoveredCafe, subscribeHoveredCafe } from '@/lib/hoverStore';
 import type { MapInsets } from '@/lib/layout';
 
-import { PIN_SAVED_COLOR, getPinColors } from './map/pinStyle';
+import { PIN_SAVED_COLOR, getFeaturedIds, getPinColors, showsRating } from './map/pinStyle';
 import type { PinState } from './map/pinStyle';
 import { StarIcon } from './icons';
 
@@ -47,13 +47,14 @@ export default function MapFallback({
   const hoveredId = useSyncExternalStore(subscribeHoveredCafe, getHoveredCafe, () => null);
 
   const { placed, here } = useMemo(() => project(cafes, currentLocation), [cafes, currentLocation]);
+  const featuredIds = useMemo(() => getFeaturedIds(cafes), [cafes]);
 
   return (
     <div className="absolute inset-0 bg-map-land" onClick={onClearSelection}>
       {/* UI に覆われていない領域。ピンはこの中に収める。 */}
       <div
         className="absolute"
-        style={{ top: insets.top, right: insets.right, bottom: insets.bottom, left: insets.left }}
+        style={{ top: insets.top + 32, right: insets.right, bottom: insets.bottom, left: insets.left }}
       >
         {here && (
           <span
@@ -82,7 +83,7 @@ export default function MapFallback({
                 if (event.pointerType === 'mouse') setHoveredCafe(cafe.id);
               }}
               onPointerLeave={() => setHoveredCafe(null)}
-              className="num absolute flex h-7 -translate-x-1/2 -translate-y-full items-center gap-1 rounded-full border-2 px-2 text-[13px] font-bold leading-none transition-transform duration-[var(--dm-duration-fast)] ease-out"
+              className="num absolute flex h-7 min-w-7 items-center justify-center gap-1 rounded-full border-2 px-2 text-[13px] font-bold leading-none transition-transform duration-[var(--dm-duration-fast)] ease-out"
               style={{
                 left: `${x}%`,
                 top: `${y}%`,
@@ -94,7 +95,7 @@ export default function MapFallback({
                 transformOrigin: 'bottom center',
               }}
             >
-              {cafe.rating != null ? (
+              {showsRating(cafe.rating, featuredIds.has(cafe.id), state) && cafe.rating != null ? (
                 <>
                   <StarIcon className="h-3.5 w-3.5" />
                   {cafe.rating.toFixed(1)}

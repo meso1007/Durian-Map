@@ -5,6 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import type { Cafe, Coordinates } from '@/lib/api';
 import { getMapInsets, getSheetHeights } from '@/lib/layout';
 import type { SheetSnap } from '@/lib/sheet';
+import { CAFE_PHOTO_TRANSITION, findCardPhoto, withViewTransition } from '@/lib/viewTransition';
 
 import { useCafeFilters } from '@/hooks/useCafeFilters';
 import { DEFAULT_NEARBY_RADIUS, useCafeSearch } from '@/hooks/useCafeSearch';
@@ -93,13 +94,51 @@ function CafeFinderContent() {
   const searchArea = query?.kind === 'area' ? query.area : initialUrl.query?.kind === 'area' ? initialUrl.query.area : '';
   const searchTitle = query?.kind === 'nearby' ? 'この辺りのカフェ' : searchArea ? `${searchArea}のカフェ` : 'カフェ';
 
+  /**
+   * 一覧 → 詳細。カードの写真が詳細の大きな写真へそのまま広がるようにつなぐ。
+   * シートの段が同時に変わる場合（モバイルで半分 → 全面）は、移動先の位置が定まらないのでつながない。
+   */
   const handleSelectFromList = useCallback(
     (id: string) => {
-      select(id, 'list');
-      setSnap('full');
+      const open = () => {
+        select(id, 'list');
+        setSnap('full');
+      };
+
+      const photo = viewport.isDesktop || snap === 'full' ? findCardPhoto(listRef.current, id) : null;
+      if (!photo) {
+        open();
+        return;
+      }
+
+      photo.style.viewTransitionName = CAFE_PHOTO_TRANSITION;
+      withViewTransition(() => {
+        // 遷移後の画面では、この名前は詳細の写真だけが持つ（2 つあると遷移が中断される）。
+        photo.style.viewTransitionName = '';
+        open();
+      });
     },
-    [select],
+    [select, listRef, viewport.isDesktop, snap],
   );
+
+  /** 詳細 → 一覧。逆向きに、詳細の写真を元のカードの写真へ戻す。 */
+  const closeDetail = useCallback(() => {
+    const photo = selectedId ? findCardPhoto(listRef.current, selectedId) : null;
+    if (!photo) {
+      dismiss();
+      return;
+    }
+
+    withViewTransition(
+      () => {
+        dismiss();
+        photo.style.viewTransitionName = CAFE_PHOTO_TRANSITION;
+      },
+      () => {
+        photo.style.viewTransitionName = '';
+      },
+    );
+  }, [selectedId, listRef, dismiss]);
 
   // 地図のピンから選んだときは半分まで。選んだ店が地図に見えたままになる。
   const handleSelectFromMap = useCallback(
@@ -125,12 +164,12 @@ function CafeFinderContent() {
     if (!selectedId) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') dismiss();
+      if (event.key === 'Escape') closeDetail();
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedId, dismiss]);
+  }, [selectedId, closeDetail]);
 
   return (
     <div className="relative isolate h-dvh w-full overflow-hidden bg-map-land text-text">
@@ -151,15 +190,17 @@ function CafeFinderContent() {
 
       {/*
         地図の上に浮く UI。モバイルでは検索バー（上）とシート（下）が別々に浮き、
-        PC では左の列に縦に並ぶ。列そのものは地図の操作を邪魔しない（pointer-events-none）。
+        PC では左の列に縦につながって 1 枚の面になる。列そのものは地図の操作を邪魔しない（pointer-events-none）。
       */}
-      <div className="pointer-events-none absolute inset-0 z-10 md:right-auto md:flex md:w-[416px] md:flex-col md:gap-3 md:p-4 lg:w-[448px]">
+      <div className="pointer-events-none absolute inset-0 z-10 md:right-auto md:flex md:w-[416px] md:flex-col md:p-4 lg:w-[448px]">
         <SearchBar
           area={searchArea}
           recentAreas={recentAreas}
           isLocating={isLocating}
           isSearching={isLoading}
           showLocate={hasSearched || tab === 'saved'}
+          // 最重要 CTA（マンゴー）は 1 画面 1 つ。詳細では「ここへ行く」が主役なので、現在地ボタンは控えめにする。
+          emphasizeLocate={tab === 'search' && selectedCafe === null}
           onLocate={locate}
           onSearch={(area) => startSearch({ kind: 'area', area })}
         />
@@ -169,7 +210,13 @@ function CafeFinderContent() {
           heights={sheetHeights}
           draggable={!viewport.isDesktop}
           onSnapChange={setSnap}
-          header={<ViewSwitch active={tab} onChange={handleTabChange} savedCount={savedCafes.length} />}
+          header={
+            // 詳細が開いている間は切り替えを畳む（詳細は 1 段深い画面で、上にタブが残ると戻り先が曖昧になる）。
+            // tabpanel が aria-labelledby で参照するので、DOM からは外さない。
+            <div hidden={selectedCafe !== null}>
+              <ViewSwitch active={tab} onChange={handleTabChange} savedCount={savedCafes.length} />
+            </div>
+          }
         >
           <Panel
             tab={tab}
@@ -195,7 +242,7 @@ function CafeFinderContent() {
             onSelect={handleSelectFromList}
             onToggleSave={(cafe: Cafe) => void toggleSave(cafe)}
             onSetStatus={(cafeId, status) => void setStatus(cafeId, status)}
-            onCloseDetail={dismiss}
+            onCloseDetail={closeDetail}
             onNotify={showNotice}
             listRef={listRef}
           />

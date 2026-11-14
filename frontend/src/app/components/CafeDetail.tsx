@@ -10,17 +10,20 @@ import {
   getCafeDomain,
   getCafeMapUrl,
   getCategoryLabel,
+  getMinutesUntilClose,
   getOpenStatusLabel,
   getPriceLabel,
   getWeekHours,
   parseCafeWebsite,
 } from '@/lib/cafe';
-import type { DayHours } from '@/lib/cafe';
 import { formatDistance, formatWalkingMinutes } from '@/lib/geo';
 import { shareUrl } from '@/lib/share';
 import type { SavedStatus } from '@/lib/storage';
+import { CAFE_PHOTO_TRANSITION } from '@/lib/viewTransition';
 
 import BrandMark from './BrandMark';
+import Photo from './Photo';
+import WeekHours from './WeekHours';
 import {
   ArrowLeftIcon,
   BookmarkIcon,
@@ -73,7 +76,12 @@ export default function CafeDetail({
   const domain = getCafeDomain(cafe);
   const photoUrl = getCafePhotoUrl(cafe, 800);
   const weekHours = getWeekHours(cafe.weekdayDescriptions);
-  const facts = [getCategoryLabel(cafe.category), getPriceLabel(cafe)].filter(Boolean);
+
+  // 閉店まで 1 時間を切っていたら、時刻ではなく残り時間で伝える（いま向かって間に合うかが分かる）。
+  const minutesLeft = cafe.openNow ? getMinutesUntilClose(cafe.closesAt) : null;
+  const closingSoon = minutesLeft !== null && minutesLeft <= 60 ? minutesLeft : null;
+  const categoryLabel = getCategoryLabel(cafe.category);
+  const priceLabel = getPriceLabel(cafe);
 
   // 共有は lib/share.ts を通す（iOS ではネイティブの共有シートに差し替わる）。
   const handleShare = async () => {
@@ -100,16 +108,20 @@ export default function CafeDetail({
     <article
       ref={scrollRef}
       aria-labelledby="cafe-detail-title"
-      className="dm-scroll absolute inset-0 z-10 animate-push overflow-y-auto bg-surface pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
+      className="dm-scroll absolute inset-0 z-10 animate-push overflow-y-auto bg-surface pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-1 md:pt-4"
     >
-      {/* 写真。無い店は面の色とマークで埋める（壊れた画像や空白にしない）。 */}
-      <div className="relative mx-3 flex aspect-[16/10] max-h-64 items-center justify-center overflow-hidden rounded-[20px] bg-surface-sunken md:mx-4">
-        {photoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={photoUrl} alt={`${cafe.name} の写真`} decoding="async" className="h-full w-full animate-fade object-cover" />
-        ) : (
-          <BrandMark className="h-16 w-16 opacity-40" />
-        )}
+      {/*
+        写真。無い店は面の色とマークで埋める（壊れた画像や空白にしない）。
+        モバイルでは低めに抑える: シートが半分の段でも店名と評価まで見えるようにするため。
+      */}
+      <div style={{ viewTransitionName: CAFE_PHOTO_TRANSITION }}
+        className="relative mx-3 flex h-32 items-center justify-center overflow-hidden rounded-[20px] bg-surface-sunken md:mx-4 md:h-56">
+        <Photo
+          src={photoUrl}
+          alt={`${cafe.name} の写真`}
+          eager
+          fallback={<BrandMark className="h-16 w-16 opacity-40" />}
+        />
 
         <button
           type="button"
@@ -126,19 +138,16 @@ export default function CafeDetail({
           id="cafe-detail-title"
           ref={headingRef}
           tabIndex={-1}
-          className="text-[22px] font-bold leading-[1.35] text-text focus-visible:outline-none"
+          className="font-display text-[22px] font-bold leading-[1.35] text-text focus-visible:outline-none"
         >
           {cafe.name}
         </h2>
 
-        {facts.length > 0 && (
+        {(categoryLabel || priceLabel) && (
           <p className="mt-1 text-sm text-text-muted">
-            {facts.map((fact, index) => (
-              <span key={fact}>
-                {index > 0 && <span aria-hidden> · </span>}
-                <span className={index === facts.length - 1 && getPriceLabel(cafe) ? 'num' : undefined}>{fact}</span>
-              </span>
-            ))}
+            {categoryLabel}
+            {categoryLabel && priceLabel && <span aria-hidden> · </span>}
+            {priceLabel && <span className="num">{priceLabel}</span>}
           </p>
         )}
 
@@ -157,7 +166,7 @@ export default function CafeDetail({
 
           {cafe.openNow !== undefined && (
             <Stat
-              label={openStatus ? `${openStatus.value}${openStatus.suffix}` : '営業状態'}
+              label={closingSoon !== null ? `あと${closingSoon}分で閉店` : openStatus ? `${openStatus.value}${openStatus.suffix}` : '営業状態'}
               tone={cafe.openNow ? 'open' : 'closed'}
               text
             >
@@ -185,7 +194,7 @@ export default function CafeDetail({
             aria-pressed={isSaved}
             className={`flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-xl border px-4 text-sm font-bold transition-colors duration-[var(--dm-duration-fast)] ${isSaved ? 'border-accent bg-accent-soft text-accent-text' : 'border-border bg-surface text-text hover:border-primary'}`}
           >
-            <BookmarkIcon filled={isSaved} className="h-5 w-5" />
+            <BookmarkIcon key={String(isSaved)} filled={isSaved} className={`h-5 w-5 ${isSaved ? 'animate-bump' : ''}`} />
             {isSaved ? '保存済み' : '保存'}
           </button>
 
@@ -219,7 +228,7 @@ export default function CafeDetail({
           </div>
         )}
 
-        {weekHours && <HoursTable rows={weekHours} />}
+        {weekHours && <WeekHours rows={weekHours} />}
 
         {/* 情報行。値が取れないフィールドは行ごと出さない。 */}
         <div className="mt-5 divide-y divide-border border-y border-border">
@@ -261,7 +270,7 @@ function Stat({
 
   return (
     <div className="flex min-w-0 flex-1 flex-col items-center gap-1 px-2">
-      {/* 読み上げは「説明 → 値」の順にする（dt が先）。見た目は flex-col-reverse で値を上に置く。 */}
+      {/* 読み上げは「説明 → 値」の順にする（dt が先）。見た目は order で値を上に置く。 */}
       <dt className="order-2 max-w-full truncate text-[11px] leading-none text-text-muted">
         {/* 時刻や件数を含むので .num を当てる（日本語は M PLUS Rounded にフォールバックする） */}
         <span className="num">{label}</span>
@@ -270,33 +279,6 @@ function Stat({
         {children}
       </dd>
     </div>
-  );
-}
-
-/** 曜日別の営業時間。今日の行を強調する。 */
-function HoursTable({ rows }: { rows: DayHours[] }) {
-  return (
-    <section className="mt-5" aria-label="営業時間">
-      <h3 className="text-xs font-bold text-text-muted">営業時間</h3>
-      <table className="mt-2 w-full border-separate border-spacing-0 text-sm">
-        <tbody>
-          {rows.map(({ day, hours, isToday, isClosed }) => (
-            <tr key={day} className={isToday ? 'font-bold text-text' : 'text-text-muted'}>
-              <th
-                scope="row"
-                className={`w-12 rounded-l-lg py-1.5 pl-3 text-left font-[inherit] ${isToday ? 'bg-success-soft' : ''}`}
-              >
-                {day}
-                {isToday && <span className="sr-only">（今日）</span>}
-              </th>
-              <td className={`rounded-r-lg py-1.5 pr-3 text-right ${isToday ? 'bg-success-soft' : ''}`}>
-                <span className={isClosed ? undefined : 'num'}>{hours}</span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
   );
 }
 

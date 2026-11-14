@@ -199,3 +199,47 @@ export function getWeekHours(weekdayDescriptions?: string[], today: Date = new D
 export function getCafeDirectionsUrl(cafe: Cafe): string {
     return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(cafe.name)}&destination_place_id=${encodeURIComponent(cafe.id)}`;
 }
+
+/** 1 日の中の営業時間帯。0:00 からの分。日をまたぐ営業は end が 1440 を超える（3:00 閉店 = 1620）。 */
+export type HourRange = { start: number; end: number };
+
+const DAY_MINUTES = 24 * 60;
+
+/**
+ * 整形済みの営業時間（「11:00–15:00、17:00–22:00」）を時間帯の配列に直す。
+ * 「24時間営業」は 0:00–24:00。時刻を読み取れない行（定休日など）は空配列。
+ */
+export function parseHourRanges(hours: string): HourRange[] {
+    if (hours.includes('24時間営業')) return [{ start: 0, end: DAY_MINUTES }];
+
+    const ranges: HourRange[] = [];
+
+    for (const matched of hours.matchAll(/(\d{1,2}):(\d{2})–(\d{1,2}):(\d{2})/g)) {
+        const start = Number(matched[1]) * 60 + Number(matched[2]);
+        let end = Number(matched[3]) * 60 + Number(matched[4]);
+        // 閉店が開店より前の時刻なら、翌日にまたいでいる。
+        if (end <= start) end += DAY_MINUTES;
+
+        ranges.push({ start, end });
+    }
+
+    return ranges;
+}
+
+/**
+ * いまから閉店までの分。closesAt はサーバーが JST で返す今日の閉店時刻（"21:00" / 日またぎは "3:00"）。
+ * 端末のタイムゾーンに関係なく JST で比べる。読み取れなければ null。
+ */
+export function getMinutesUntilClose(closesAt: string | undefined, now: Date = new Date()): number | null {
+    const matched = closesAt?.match(/^(\d{1,2}):(\d{2})$/);
+    if (!matched) return null;
+
+    // UTC に 9 時間足して UTC のゲッターで読むと、JST の時・分になる。
+    const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    const nowMinutes = jst.getUTCHours() * 60 + jst.getUTCMinutes();
+    const closeMinutes = Number(matched[1]) * 60 + Number(matched[2]);
+
+    const diff = closeMinutes - nowMinutes;
+    // 営業中なのに閉店時刻が過去に見えるのは、閉店が翌日（深夜営業）のとき。
+    return diff >= 0 ? diff : diff + DAY_MINUTES;
+}

@@ -54,9 +54,9 @@ export default function Sheet({
       onTransitionEnd={(event) => {
         if (event.target === event.currentTarget && event.propertyName === 'transform') setSettledSnap(snap);
       }}
-      className="dm-sheet pointer-events-auto absolute inset-x-0 bottom-0 z-20 flex flex-col overflow-hidden rounded-t-3xl bg-surface shadow-float md:static md:min-h-0 md:flex-1 md:rounded-3xl"
+      className="dm-sheet pointer-events-auto absolute inset-x-0 bottom-0 z-20 flex flex-col overflow-hidden rounded-t-3xl bg-surface shadow-float md:static md:min-h-0 md:flex-1 md:rounded-t-none md:rounded-b-3xl"
     >
-      <div {...dragProps} className="shrink-0 touch-none md:touch-auto">
+      <div {...dragProps} className="shrink-0 touch-none select-none md:touch-auto md:select-auto">
         {/* ハンドル。見た目は細い棒だが、押せる領域は行の幅いっぱいに取る。 */}
         <button
           type="button"

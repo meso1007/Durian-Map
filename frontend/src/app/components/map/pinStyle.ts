@@ -31,5 +31,27 @@ export function getPinColors(openNow: boolean | undefined, state: PinState): Pin
     };
 }
 
+/** 評価の札を最初から出す店の数。全部に出すと札どうしが重なって読めなくなる。 */
+const FEATURED_COUNT = 5;
+
+/**
+ * 評価の札を最初から出す店（評価の高い順に数件）。
+ * それ以外は小さな丸いピンにしておき、選んだとき・一覧でポインタを載せたときに札へ変える。
+ */
+export function getFeaturedIds(cafes: readonly { id: string; rating?: number; userRatingCount?: number }[]): Set<string> {
+    return new Set(
+        cafes
+            .filter((cafe) => cafe.rating != null)
+            .sort((a, b) => b.rating! - a.rating! || (b.userRatingCount ?? 0) - (a.userRatingCount ?? 0))
+            .slice(0, FEATURED_COUNT)
+            .map((cafe) => cafe.id),
+    );
+}
+
+/** そのピンを札（星 + 評価）で出すか。評価が無ければ常に丸いピン。 */
+export function showsRating(rating: number | undefined, featured: boolean, state: PinState): boolean {
+    return rating != null && (featured || state !== 'default');
+}
+
 /** 保存済みの印（右上の点）。 */
 export const PIN_SAVED_COLOR = '#E2467C'; // --tropic-hibiscus-500

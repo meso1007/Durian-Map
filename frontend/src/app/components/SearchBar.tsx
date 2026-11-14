@@ -18,6 +18,8 @@ type Props = {
   isSearching: boolean;
   /** 現在地ボタンを出すか。初回表示では本体側の CTA が同じ役を持つので出さない。 */
   showLocate: boolean;
+  /** 現在地ボタンをマンゴーで出すか。詳細や保存の一覧では主役ではないので、控えめな面にする。 */
+  emphasizeLocate: boolean;
   onLocate: () => void;
   onSearch: (area: string) => void;
 };
@@ -34,6 +36,7 @@ export default function SearchBar({
   isLocating,
   isSearching,
   showLocate,
+  emphasizeLocate,
   onLocate,
   onSearch,
 }: Props) {
@@ -64,6 +67,7 @@ export default function SearchBar({
   }, [value, recentAreas]);
 
   const showSuggestions = open && suggestions.length > 0;
+  const isDirty = value.trim() !== '' && value.trim() !== area;
 
   // 「/」で検索欄へ。入力中の欄があるときは奪わない。
   useEffect(() => {
@@ -93,7 +97,7 @@ export default function SearchBar({
   };
 
   return (
-    <div className="pointer-events-auto absolute inset-x-3 top-[calc(0.5rem+env(safe-area-inset-top))] z-30 md:static md:rounded-3xl md:bg-primary-deepest md:p-4 md:shadow-float">
+    <div className="pointer-events-auto absolute inset-x-3 top-[calc(0.5rem+env(safe-area-inset-top))] z-30 animate-pop md:static md:rounded-t-3xl md:bg-primary-deepest md:p-4 md:shadow-float">
       {/*
         ブランドロックアップ（PC）。マークがワードマークの "D" を兼ねるので、
         表示テキストは "urian Map"、読み上げは aria-label で "Durian Map" にする。
@@ -115,7 +119,7 @@ export default function SearchBar({
           event.preventDefault();
           submit(activeIndex >= 0 && showSuggestions ? suggestions[activeIndex].name : value);
         }}
-        className="relative flex h-14 items-center gap-1 rounded-2xl bg-surface pl-2 pr-2 shadow-float md:shadow-none"
+        className="relative flex h-14 items-center gap-1 rounded-2xl bg-surface pl-2 pr-2 shadow-float outline-offset-2 outline-primary has-[input:focus-visible]:outline-2 md:shadow-none md:outline-lime"
       >
         <BrandMark className="h-9 w-9 shrink-0 md:hidden" />
         <SearchIcon className="ml-2 hidden h-5 w-5 shrink-0 text-text-muted md:block" />
@@ -177,14 +181,16 @@ export default function SearchBar({
           </button>
         )}
 
-        <button
-          type="submit"
-          disabled={!value.trim()}
-          aria-label="このエリアでさがす"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-deepest text-cream transition-opacity duration-[var(--dm-duration-fast)] disabled:opacity-35 md:hidden"
-        >
-          <SearchIcon />
-        </button>
+        {/* 検索ボタンは、いまの検索と違う文字が入っているときだけ出す（キーボードの「検索」でも送れる）。 */}
+        {isDirty && (
+          <button
+            type="submit"
+            aria-label="このエリアでさがす"
+            className="flex h-11 w-11 shrink-0 animate-fade items-center justify-center rounded-xl bg-primary-deepest text-cream transition-transform duration-[var(--dm-duration-fast)] active:scale-95"
+          >
+            <SearchIcon />
+          </button>
+        )}
 
         {showLocate && (
           <button
@@ -192,7 +198,7 @@ export default function SearchBar({
             onClick={onLocate}
             disabled={isLocating}
             aria-label={isLocating ? '現在地を取得中' : '近くからさがす'}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-cta text-text transition-transform duration-[var(--dm-duration-fast)] active:scale-95 disabled:opacity-60"
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-text transition-[transform,background-color] duration-[var(--dm-duration-fast)] active:scale-95 disabled:opacity-60 ${emphasizeLocate ? 'bg-cta' : 'bg-surface-sunken'}`}
           >
             {isLocating ? <LoadingSpinner className="h-5 w-5" /> : <TargetIcon className="h-5 w-5" />}
           </button>

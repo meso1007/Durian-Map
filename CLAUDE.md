@@ -66,8 +66,14 @@
 
 | ファイル | 役割 |
 |---|---|
-| `app/page.tsx` | 画面本体。状態は `useState` / `useEffect` のみ（状態ライブラリなし） |
-| `app/components/MapView.tsx` | 地図。`@vis.gl/react-google-maps` + `@googlemaps/markerclusterer`。ピンの枠色で営業状態を表す |
+| `app/page.tsx` | 画面の骨格。全面の地図の上に検索バーと本体（シート / パネル）を浮かせる。状態は hooks に分けてある（状態ライブラリなし） |
+| `app/components/Panel.tsx` | 本体の中身。初回表示（`Welcome`）/ 一覧（`ListHeader` + `CafeList`）/ 詳細（`CafeDetail`）のどれか 1 つ |
+| `app/components/Sheet.tsx` | 本体の面。モバイルは 3 段階のボトムシート、PC は左のパネル。位置は `globals.css` の `.dm-sheet` |
+| `app/components/MapView.tsx` | 地図。`@vis.gl/react-google-maps` + `@googlemaps/markerclusterer`。出せないときは `MapFallback` |
+| `app/components/map/` | 地図の見た目。`mapStyle.ts`（地図の色・ピンの SVG）と `pinStyle.ts`（ピンの色） |
+| `hooks/` | 検索・絞り込み・保存・選択・現在地・URL 同期・シートのドラッグ・地図のピンと視点 |
+| `lib/layout.ts` / `lib/sheet.ts` | 画面の寸法と「地図のどこが UI に覆われているか」、シートの段の計算 |
+| `lib/cafe.ts` / `lib/geo.ts` | Places の値を表示用に直す純関数（住所・営業時間・価格帯・距離） |
 | `lib/api.ts` | 検索 API クライアント。`Cafe` 型・`ApiError`・`getCafePhotoUrl()` |
 | `lib/storage.ts` | 保存済みカフェの永続化（`SavedCafe` = `Cafe` + `status` + `savedAt`）。Web は localStorage、iOS は Preferences |
 | `lib/geolocation.ts` | 現在地取得。Web は `navigator.geolocation`、iOS は Capacitor Geolocation |
@@ -86,15 +92,19 @@
 - 色は [docs/design-tokens.md](docs/design-tokens.md) が正。ハードコードの hex を新たに増やさない
 - ブランド素材の正は `designs/durian-map-tropical.pen`。SVG は `designs/pen-frame-to-svg.py` で起こす（手で描き足さない）
 - `places.ts` の `FIELD_MASK` を安易に増やさない（Places の課金ティアが上がる）
+- **地図に重ねる面を足したら `lib/layout.ts` の `getMapInsets()` を見直す**。地図は全面に敷いてあり、
+  視点の寄せ方・Google のロゴの位置・再検索の半径がすべてこの値で決まる。CSS 側の幅や高さ
+  （`page.tsx` の `md:w-[416px]`、`globals.css` の `.dm-sheet`）とそろっていないと、選んだ店がパネルの下に入る
+- 写真のサイズは一覧 200 / 詳細 800 の 2 種類だけ（サイズごとに別キャッシュになり、Places の写真課金が増える）
 - 本番ビルドの `NEXT_PUBLIC_*` は `package.json` の `build:prod` で明示指定する（`.env.local` が優先されて localhost が焼き込まれるのを防ぐ）
 
 ## 検証
 
-自動テストは無い。変更後は最低限これを通す:
+変更後は最低限これを通す:
 
 ```bash
-cd backend  && bun run typecheck
-cd frontend && bun run lint && bun run build:prod
+cd backend  && bun run typecheck && bun run test
+cd frontend && bun run typecheck && bun run lint && bun run test && bun run build:prod
 cd frontend && bun run build:ios   # iOS を触ったとき（Xcode が要る）
 ```
 

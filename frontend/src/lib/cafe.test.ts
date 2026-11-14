@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Cafe } from './api';
-import { formatAddress, formatHours, getCafeDirectionsUrl, getPriceLabel, getWeekHours } from './cafe';
+import {
+    formatAddress,
+    formatHours,
+    getCafeDirectionsUrl,
+    getMinutesUntilClose,
+    getPriceLabel,
+    getWeekHours,
+    parseHourRanges,
+} from './cafe';
 
 const cafe = (overrides: Partial<Cafe> = {}): Cafe => ({ id: 'ChIJ_test', name: 'Test & Cafe', address: '', ...overrides });
 
@@ -91,5 +99,46 @@ describe('getCafeDirectionsUrl', () => {
         expect(getCafeDirectionsUrl(cafe())).toBe(
             'https://www.google.com/maps/dir/?api=1&destination=Test%20%26%20Cafe&destination_place_id=ChIJ_test',
         );
+    });
+});
+
+describe('parseHourRanges', () => {
+    it('1 つの時間帯を分に直す', () => {
+        expect(parseHourRanges('10:00–19:00')).toEqual([{ start: 600, end: 1140 }]);
+    });
+
+    it('昼と夜の 2 つの時間帯を読む', () => {
+        expect(parseHourRanges('11:00–15:00、17:00–22:00')).toEqual([
+            { start: 660, end: 900 },
+            { start: 1020, end: 1320 },
+        ]);
+    });
+
+    it('日をまたぐ営業は end が 24 時を超える', () => {
+        expect(parseHourRanges('14:00–3:00')).toEqual([{ start: 840, end: 1620 }]);
+    });
+
+    it('24時間営業は 0:00–24:00、定休日は空', () => {
+        expect(parseHourRanges('24時間営業')).toEqual([{ start: 0, end: 1440 }]);
+        expect(parseHourRanges('定休日')).toEqual([]);
+    });
+});
+
+describe('getMinutesUntilClose', () => {
+    // 2026-11-14 18:15 JST = 09:15 UTC
+    const now = new Date(Date.UTC(2026, 10, 14, 9, 15));
+
+    it('今日の閉店までの分を JST で数える', () => {
+        expect(getMinutesUntilClose('19:00', now)).toBe(45);
+        expect(getMinutesUntilClose('21:30', now)).toBe(195);
+    });
+
+    it('深夜営業（閉店が翌日）は 24 時間を足す', () => {
+        expect(getMinutesUntilClose('3:00', now)).toBe(525);
+    });
+
+    it('読み取れなければ null', () => {
+        expect(getMinutesUntilClose(undefined, now)).toBeNull();
+        expect(getMinutesUntilClose('まもなく', now)).toBeNull();
     });
 });

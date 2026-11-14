@@ -103,6 +103,7 @@
   --animate-push: dm-push var(--dm-duration-base) var(--dm-ease-out) both;
   --animate-pop: dm-pop var(--dm-duration-base) var(--dm-ease-out) both;
   --animate-progress: dm-progress 1.1s var(--dm-ease-in-out) infinite;
+  --animate-bump: dm-bump var(--dm-duration-slow) var(--dm-ease-out) both;
 }
 
 html,
@@ -132,10 +133,16 @@ body {
   color: var(--durian-seed-900);
 }
 
-/* キーボード操作の現在地。個別に outline を消さないこと（docs/design.md 6節） */
-:focus-visible {
-  outline: 2px solid var(--dm-primary);
-  outline-offset: 2px;
+/*
+  キーボード操作の現在地。個別に outline を消さないこと（docs/design.md 6節）。
+  base レイヤーに置いてあるのは、検索欄のように「枠を親の面に出す」箇所だけ
+  ユーティリティで上書きできるようにするため（レイヤー外に書くと上書きできない）。
+*/
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--dm-primary);
+    outline-offset: 2px;
+  }
 }
 
 /* 横スクロールの行（チップ）はスクロールバーを出さない */
@@ -245,6 +252,13 @@ body {
   }
 }
 
+/* 保存した瞬間のしおり。少し大きくなって戻る */
+@keyframes dm-bump {
+  40% {
+    transform: scale(1.35);
+  }
+}
+
 /* 検索中の進行バー。幅の決まった帯が左から右へ抜ける（グラデーションは使わない） */
 @keyframes dm-progress {
   from {
@@ -253,6 +267,26 @@ body {
   to {
     transform: translateX(350%);
   }
+}
+
+/*
+  一覧 ⇄ 詳細で、同じ店の写真をつなぐ（lib/viewTransition.ts）。
+  つなぐのは写真だけ。画面のほかの部分は切り替えの前後を重ねず、すぐ入れ替える。
+*/
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+::view-transition-group(cafe-photo) {
+  animation-duration: var(--dm-duration-slow);
+  animation-timing-function: var(--dm-ease-out);
+}
+::view-transition-old(cafe-photo),
+::view-transition-new(cafe-photo) {
+  /* 縦横比が違う 2 枚（正方形 → 横長）を、歪ませずに切り抜いたまま重ねる */
+  height: 100%;
+  object-fit: cover;
+  border-radius: 20px;
 }
 
 /* 動きを減らす設定では、すべて止める（docs/design.md 4.6節） */

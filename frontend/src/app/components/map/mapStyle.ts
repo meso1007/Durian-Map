@@ -7,7 +7,7 @@
 
 import type { Cafe } from '@/lib/api';
 
-import { PIN_SAVED_COLOR, getPinColors } from './pinStyle';
+import { PIN_SAVED_COLOR, getPinColors, showsRating } from './pinStyle';
 import type { PinState } from './pinStyle';
 
 export const MAP_BACKGROUND = '#EEF5D9';
@@ -42,14 +42,14 @@ export const MAP_STYLE: google.maps.MapTypeStyle[] = [
 ];
 
 /** ピンに必要な情報だけを抜いたもの。これが変わったときだけ描き直す。 */
-export type PinData = { rating?: number; openNow?: boolean; saved: boolean };
+export type PinData = { rating?: number; openNow?: boolean; saved: boolean; featured: boolean };
 
-export function toPinData(cafe: Cafe, saved: boolean): PinData {
-    return { rating: cafe.rating, openNow: cafe.openNow, saved };
+export function toPinData(cafe: Cafe, saved: boolean, featured: boolean): PinData {
+    return { rating: cafe.rating, openNow: cafe.openNow, saved, featured };
 }
 
 export function samePinData(a: PinData, b: PinData): boolean {
-    return a.rating === b.rating && a.openNow === b.openNow && a.saved === b.saved;
+    return a.rating === b.rating && a.openNow === b.openNow && a.saved === b.saved && a.featured === b.featured;
 }
 
 // 評価つきのピン: 角丸の札 + 下向きのしっぽ。星は SVG、数値は Marker の label で重ねる
@@ -96,7 +96,7 @@ function pinScale(state: PinState): number {
 }
 
 export function createCafePinIcon(data: PinData, state: PinState): google.maps.Icon {
-    const hasRating = data.rating != null;
+    const hasRating = showsRating(data.rating, data.featured, state);
     const base = hasRating ? PILL : DOT;
     const scale = pinScale(state);
     const width = base.width * scale;
@@ -128,7 +128,7 @@ function getDisplayFontFamily(): string {
 
 /** 評価の数値。評価の無い店は label を付けない。 */
 export function createCafePinLabel(data: PinData, state: PinState): google.maps.MarkerLabel | null {
-    if (data.rating == null) return null;
+    if (data.rating == null || !showsRating(data.rating, data.featured, state)) return null;
 
     return {
         text: data.rating.toFixed(1),

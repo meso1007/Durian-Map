@@ -15,6 +15,7 @@ import {
     toPinData,
 } from '@/app/components/map/mapStyle';
 import type { PinData } from '@/app/components/map/mapStyle';
+import { getFeaturedIds } from '@/app/components/map/pinStyle';
 import type { PinState } from '@/app/components/map/pinStyle';
 
 const clusterRenderer: Renderer = {
@@ -104,6 +105,7 @@ export function useCafeMarkers({
         const entries = entriesRef.current;
         const valid = cafes.filter((cafe) => cafe.lat != null && cafe.lng != null);
         const nextIds = new Set(valid.map((cafe) => cafe.id));
+        const featuredIds = getFeaturedIds(valid);
 
         const added: google.maps.Marker[] = [];
         const removed: google.maps.Marker[] = [];
@@ -118,7 +120,7 @@ export function useCafeMarkers({
 
         valid.forEach((cafe) => {
             const position = { lat: cafe.lat!, lng: cafe.lng! };
-            const data = toPinData(cafe, savedIds.has(cafe.id));
+            const data = toPinData(cafe, savedIds.has(cafe.id), featuredIds.has(cafe.id));
             const existing = entries.get(cafe.id);
 
             if (existing) {

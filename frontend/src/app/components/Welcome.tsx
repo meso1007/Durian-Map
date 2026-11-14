@@ -25,11 +25,7 @@ export default function Welcome({
 
   return (
     <div className="dm-scroll flex-1 overflow-y-auto px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-1 md:px-6 md:pt-3">
-      <p className="animate-rise font-display text-xs font-bold uppercase tracking-[0.18em] text-success-text">
-        Independent cafes only
-      </p>
-
-      <h2 className="mt-2 animate-rise text-[28px] font-bold leading-[1.3] tracking-[-0.01em] text-text [animation-delay:40ms] md:text-[32px]">
+      <h2 className="animate-rise text-[28px] font-bold leading-[1.3] tracking-[-0.01em] text-text md:text-[32px]">
         チェーンじゃない、
         <br />
         あの一杯へ。

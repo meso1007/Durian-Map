@@ -30,14 +30,29 @@ const coHeadline = localFont({
   ],
 });
 
+const TITLE = "Durian Map｜チェーンじゃない、あの一杯へ。";
+const DESCRIPTION = "大手チェーンを除いて、個人経営の小さなカフェだけを地図でさがせます。近くのカフェも、気になる街のカフェも。";
+
 export const metadata: Metadata = {
-  title: "Durian Map",
-  description: "スタバもドトールも飽きたあなたへ。個人経営や小さなお気に入りカフェを見つけるためのマップ。",
+  // 共有リンクの土台。OG の URL を絶対パスにするために要る。
+  metadataBase: new URL(process.env.NEXT_PUBLIC_WEB_BASE_URL || "https://durian-map.pages.dev"),
+  title: TITLE,
+  description: DESCRIPTION,
   manifest: "/manifest.json",
   appleWebApp: {
     title: "Durian Map",
     statusBarStyle: "default",
   },
+  openGraph: {
+    type: "website",
+    locale: "ja_JP",
+    siteName: "Durian Map",
+    title: TITLE,
+    description: DESCRIPTION,
+    url: "/",
+    images: [{ url: "/logo-512.png", width: 512, height: 512, alt: "Durian Map" }],
+  },
+  twitter: { card: "summary", title: TITLE, description: DESCRIPTION, images: ["/logo-512.png"] },
 };
 
 export const viewport: Viewport = {
