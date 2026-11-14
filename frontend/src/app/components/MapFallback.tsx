@@ -96,7 +96,7 @@ export default function MapFallback({
               }}
             >
               <span
-                className={`num relative flex items-center justify-center gap-1 rounded-full font-bold leading-none transition-transform duration-[var(--dm-duration-fast)] ease-out ${pill ? 'h-7 border-2 px-2 text-[13px]' : 'h-[18px] w-[18px] border-[2.5px]'}`}
+                className={`num relative flex items-center justify-center gap-1 rounded-full font-medium leading-none transition-transform duration-[var(--dm-duration-fast)] ease-out ${pill ? 'h-7 border-2 px-2 text-sm' : 'h-5 w-5 border-[2.5px]'}`}
                 style={{
                   backgroundColor: colors.fill,
                   borderColor: colors.stroke,
@@ -106,7 +106,7 @@ export default function MapFallback({
               >
                 {pill ? (
                   <>
-                    <StarIcon className="h-3.5 w-3.5" />
+                    <StarIcon className="h-4 w-4" />
                     {cafe.rating!.toFixed(1)}
                   </>
                 ) : (
@@ -123,7 +123,7 @@ export default function MapFallback({
           );
         })}
 
-        <p className="absolute bottom-3 left-1/2 w-max max-w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-full bg-surface px-3.5 py-2 text-center text-xs leading-[1.5] text-text-muted shadow-card">
+        <p className="absolute bottom-3 left-1/2 w-max max-w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-full bg-surface px-3 py-2 text-center text-xs leading-[1.5] text-text-muted shadow-card">
           {reason === 'missing-key'
             ? '地図のキーが未設定のため、位置関係だけを表示しています。'
             : '地図を読み込めませんでした。一覧からさがせます。'}

@@ -209,7 +209,7 @@ function ResearchPrompt({
       <button
         type="button"
         onClick={handleClick}
-        className="pointer-events-auto inline-flex min-h-11 animate-pop items-center gap-2 rounded-full bg-surface px-4 text-sm font-bold text-text shadow-float transition-transform duration-[var(--dm-duration-fast)] active:scale-95"
+        className="pointer-events-auto inline-flex min-h-11 animate-pop items-center gap-2 rounded-xl bg-surface px-4 text-sm font-medium text-text shadow-float transition-transform duration-[var(--dm-duration-fast)] active:scale-95"
       >
         <SearchIcon className="h-4 w-4" />
         このエリアで再検索
@@ -239,18 +239,18 @@ function ZoomButtons({ insets }: Pick<MapViewProps, 'insets'>) {
 
   return (
     <div
-      className="absolute z-20 flex flex-col overflow-hidden rounded-2xl bg-surface shadow-float"
+      className="absolute z-20 flex flex-col overflow-hidden rounded-xl bg-surface shadow-float"
       style={{ right: insets.right + 12, bottom: insets.bottom + 36 }}
     >
       <button type="button" onClick={() => zoomBy(1)} aria-label="地図を拡大" className="flex h-11 w-11 items-center justify-center text-text hover:bg-surface-sunken focus-visible:-outline-offset-2">
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-          <path strokeLinecap="round" strokeWidth={2} d="M12 5v14M5 12h14" />
+          <path strokeLinecap="round" strokeWidth={1.5} d="M12 5v14M5 12h14" />
         </svg>
       </button>
       <span aria-hidden className="h-px bg-border" />
       <button type="button" onClick={() => zoomBy(-1)} aria-label="地図を縮小" className="flex h-11 w-11 items-center justify-center text-text hover:bg-surface-sunken focus-visible:-outline-offset-2">
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-          <path strokeLinecap="round" strokeWidth={2} d="M5 12h14" />
+          <path strokeLinecap="round" strokeWidth={1.5} d="M5 12h14" />
         </svg>
       </button>
     </div>

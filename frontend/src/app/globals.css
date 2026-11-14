@@ -13,6 +13,8 @@
   --durian-green-500: #2e8b57;
   --durian-lime-400: #a8cf3b;
   --durian-lime-100: #e4f3ba;
+  /* 紙の白。パネル・シート・カードの面（面そのものには色を付けない / docs/design.md 3節） */
+  --durian-paper-50: #fffdf8;
   --durian-cream-50: #fff7e6;
   --durian-cream-100: #fdf1d4;
   --durian-cream-200: #f3e4b8;
@@ -36,7 +38,7 @@
   --dm-info: var(--tropic-lagoon-500);
   --dm-success: var(--durian-green-500);
   --dm-error: #c2410c;
-  --dm-surface: var(--durian-cream-50);
+  --dm-surface: var(--durian-paper-50);
   --dm-border: var(--durian-cream-200);
   --dm-text: var(--durian-seed-900);
   --dm-text-muted: var(--durian-seed-600);
@@ -255,7 +257,7 @@ body {
 /* 保存した瞬間のしおり。少し大きくなって戻る */
 @keyframes dm-bump {
   40% {
-    transform: scale(1.35);
+    transform: scale(1.15);
   }
 }
 
@@ -286,7 +288,7 @@ body {
   /* 縦横比が違う 2 枚（正方形 → 横長）を、歪ませずに切り抜いたまま重ねる */
   height: 100%;
   object-fit: cover;
-  border-radius: 20px;
+  border-radius: 8px;
 }
 
 /* 動きを減らす設定では、すべて止める（docs/design.md 4.6節） */

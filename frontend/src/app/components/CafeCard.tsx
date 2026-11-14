@@ -52,14 +52,13 @@ function CafeCard({ cafe, distance, savedStatus, now, index, onSelect }: Props) 
       onFocus={() => setHoveredCafe(cafe.id)}
       onBlur={() => setHoveredCafe(null)}
       style={{ animationDelay: `${Math.min(index, 8) * 28}ms` }}
-      className="group flex w-full shrink-0 animate-rise items-center gap-3.5 rounded-[20px] p-2 text-left transition-colors duration-[var(--dm-duration-fast)] hover:bg-surface-sunken active:bg-surface-sunken"
+      className="group flex w-full shrink-0 animate-rise items-center gap-3 rounded-2xl p-2 text-left transition-colors duration-[var(--dm-duration-fast)] hover:bg-surface-sunken active:bg-surface-sunken"
     >
       {/* 写真 88x88 / 角丸 16px */}
-      <div data-photo className="relative flex h-[88px] w-[88px] shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-surface-sunken text-text-muted">
+      <div data-photo className="relative flex h-[88px] w-[88px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-sunken text-text-muted">
         <Photo
           src={photoUrl}
           alt=""
-          className="transition-transform duration-[var(--dm-duration-slow)] group-hover:scale-105"
           fallback={<CupIcon className="h-7 w-7" />}
         />
       </div>
@@ -67,11 +66,11 @@ function CafeCard({ cafe, distance, savedStatus, now, index, onSelect }: Props) 
       <div className="min-w-0 flex-1 py-0.5">
         <div className="flex items-start gap-2">
           {/* button の中は見出しとして公開されないので、h3 ではなく span にする。 */}
-          <span className="font-display line-clamp-2 min-w-0 flex-1 text-base font-bold leading-[1.4] text-text">{cafe.name}</span>
+          <span className="font-display line-clamp-2 min-w-0 flex-1 text-base font-medium leading-[1.4] text-text">{cafe.name}</span>
 
           {savedStatus && (
             <span
-              className={`mt-0.5 inline-flex h-5 shrink-0 items-center gap-1 rounded-full px-1.5 text-[11px] font-bold leading-none ${savedStatus === 'visited' ? 'bg-success-soft text-success-text' : 'bg-accent-soft text-accent-text'}`}
+              className={`mt-0.5 inline-flex h-5 shrink-0 items-center gap-1 rounded-full px-1.5 text-xs font-medium leading-none ${savedStatus === 'visited' ? 'bg-success-soft text-success-text' : 'bg-accent-soft text-accent-text'}`}
             >
               {savedStatus === 'visited' ? <CheckIcon /> : <BookmarkIcon filled className="h-2.5 w-2.5" />}
               {savedStatus === 'visited' ? '訪問済み' : '行きたい'}
@@ -83,7 +82,7 @@ function CafeCard({ cafe, distance, savedStatus, now, index, onSelect }: Props) 
         <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-text-muted">
           {cafe.rating != null && (
             <span className="inline-flex items-center gap-1">
-              <StarIcon className="h-3.5 w-3.5 text-star" />
+              <StarIcon className="h-4 w-4 text-star" />
               <span className="sr-only">評価</span>
               <span className="num text-sm font-bold text-text">{cafe.rating.toFixed(1)}</span>
               {cafe.userRatingCount != null && (
@@ -113,7 +112,7 @@ function CafeCard({ cafe, distance, savedStatus, now, index, onSelect }: Props) 
           時刻はサーバーがレスポンス時に JST で計算した値（closesAt / opensAt）。
         */}
         {cafe.openNow !== undefined && (
-          <p className={`mt-1 flex items-center gap-1.5 text-[13px] font-medium ${cafe.openNow && !closingSoon ? 'text-success-text' : 'text-accent-text'}`}>
+          <p className={`mt-1 flex items-center gap-1.5 text-sm font-medium ${cafe.openNow && !closingSoon ? 'text-success-text' : 'text-accent-text'}`}>
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${cafe.openNow && !closingSoon ? 'bg-success' : 'bg-accent'}`} />
             {closingSoon ? (
               <span>

@@ -72,9 +72,9 @@ export default function WeekHours({ rows }: { rows: DayHours[] }) {
   return (
     <section className="mt-6" aria-label="営業時間">
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-xs font-bold text-text-muted">営業時間</h3>
+        <h3 className="text-xs font-medium text-text-muted">営業時間</h3>
         {/* 選んだ曜日の時刻。柱を押すたびに読み上げる。 */}
-        <p aria-live="polite" className="text-sm font-bold text-text">
+        <p aria-live="polite" className="text-sm font-medium text-text">
           {selected.day}曜
           {selected.isToday && <span className="font-medium text-text-muted">（今日）</span>}
           <span className={`ml-2 ${selected.isClosed ? '' : 'num'}`}>{selected.hours}</span>
@@ -83,7 +83,7 @@ export default function WeekHours({ rows }: { rows: DayHours[] }) {
 
       <div className="mt-3 flex gap-2">
         {/* 軸の目盛り。上が開店側、下が閉店側。 */}
-        <div aria-hidden className="num relative h-24 w-6 shrink-0 text-right text-[11px] leading-none text-text-muted">
+        <div aria-hidden className="num relative h-24 w-6 shrink-0 text-right text-xs leading-none text-text-muted">
           {ticks.map((minutes) => (
             <span key={minutes} className="absolute right-0 -translate-y-1/2" style={{ top: position(minutes) }}>
               {formatAxisTime(minutes)}
@@ -124,7 +124,7 @@ export default function WeekHours({ rows }: { rows: DayHours[] }) {
                   ))}
 
                   {day.ranges.length === 0 && (
-                    <span className="absolute inset-0 flex items-center justify-center text-[11px] font-medium text-text-muted">
+                    <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-text-muted">
                       休
                     </span>
                   )}
@@ -134,7 +134,7 @@ export default function WeekHours({ rows }: { rows: DayHours[] }) {
                   )}
                 </span>
 
-                <span className={`text-xs leading-none ${day.isToday ? 'font-bold text-text' : 'text-text-muted'}`}>
+                <span className={`text-xs leading-none ${day.isToday ? 'font-medium text-text' : 'text-text-muted'}`}>
                   {day.day}
                 </span>
               </button>

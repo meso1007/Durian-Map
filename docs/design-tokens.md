@@ -13,7 +13,8 @@
 | `--durian-green-500` | `#2E8B57` | ボタン hover、営業中ドット、リンク |
 | `--durian-lime-400` | `#A8CF3B` | ロゴ・果皮のライム、選択リング、クラスタ |
 | `--durian-lime-100` | `#E4F3BA` | 営業中バッジ背景、タグ背景（緑系） |
-| `--durian-cream-50` | `#FFF7E6` | 画面背景、ボトムシート、カード地 |
+| `--durian-paper-50` | `#FFFDF8` | パネル・シート・カードの面（2026-11-14 追加。面に色を付けない） |
+| `--durian-cream-50` | `#FFF7E6` | 地図のピンの面、スプラッシュ |
 | `--durian-cream-100` | `#FDF1D4` | 入力欄・チップ背景、区切り |
 | `--durian-cream-200` | `#F3E4B8` | 罫線、スケルトン、影付きカードの縁 |
 | `--durian-seed-900` | `#1F3218` | 本文テキスト（最濃） |
@@ -44,7 +45,7 @@
 | `--dm-info` | `--tropic-lagoon-500` | 位置情報・補助情報 |
 | `--dm-success` | `--durian-green-500` | 営業中、保存完了トースト |
 | `--dm-error` | `#C2410C` | エラートースト（クリーム地でコントラスト 5.6:1） |
-| `--dm-surface` | `--durian-cream-50` | 面 |
+| `--dm-surface` | `--durian-paper-50` `#FFFDF8` | 面（パネル・シート・カード）。紙の白 |
 | `--dm-border` | `--durian-cream-200` | 罫線 |
 | `--dm-text` | `--durian-seed-900` | 本文 |
 | `--dm-text-muted` | `--durian-seed-600` | サブテキスト |

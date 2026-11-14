@@ -20,7 +20,7 @@ export default function Toast({ toast, onDismiss }: { toast: ToastValue | null; 
         <div
           // 同じ文言が続けて出ても動きをやり直す
           key={`${toast.tone}:${toast.message}`}
-          className={`pointer-events-auto flex max-w-md animate-pop items-center gap-2.5 rounded-2xl px-4 py-3 text-sm font-bold shadow-float ${toast.tone === 'error' ? 'bg-error text-white' : 'bg-primary-deepest text-cream'}`}
+          className={`pointer-events-auto flex max-w-md animate-pop items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium shadow-float ${toast.tone === 'error' ? 'bg-error text-white' : 'bg-primary-deepest text-cream'}`}
         >
           {toast.tone === 'error' ? (
             <AlertIcon className="h-5 w-5 shrink-0" />

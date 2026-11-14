@@ -117,7 +117,7 @@ export default function CafeDetail({
         モバイルでは低めに抑える: シートが半分の段でも店名と評価まで見えるようにするため。
       */}
       <div style={{ viewTransitionName: CAFE_PHOTO_TRANSITION }}
-        className="relative mx-3 flex h-32 items-center justify-center overflow-hidden rounded-[20px] bg-surface-sunken md:mx-4 md:h-56">
+        className="relative mx-3 flex h-32 items-center justify-center overflow-hidden rounded-lg bg-surface-sunken md:mx-4 md:h-56">
         {/* マークは写真の下に敷いておく。読み込み中も「空の箱」に見えず、写真が無い店ではそのまま残る。 */}
         <BrandMark className="absolute h-14 w-14 opacity-30" />
         <Photo src={photoUrl} alt={`${cafe.name} の写真`} eager className="relative" fallback={null} />
@@ -138,7 +138,7 @@ export default function CafeDetail({
           id="cafe-detail-title"
           ref={headingRef}
           tabIndex={-1}
-          className="font-display text-[22px] font-bold leading-[1.35] text-text focus-visible:outline-none"
+          className="font-display text-xl font-bold leading-[1.35] text-text focus-visible:outline-none"
         >
           {cafe.name}
         </h2>
@@ -163,7 +163,7 @@ export default function CafeDetail({
           )}
 
           {cafe.openNow !== undefined && (
-            <span className={`inline-flex items-center gap-1.5 text-[15px] font-bold ${cafe.openNow && closingSoon === null ? 'text-success-text' : 'text-accent-text'}`}>
+            <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${cafe.openNow && closingSoon === null ? 'text-success-text' : 'text-accent-text'}`}>
               <span className={`h-2 w-2 rounded-full ${cafe.openNow && closingSoon === null ? 'bg-success' : 'bg-accent'}`} />
               {closingSoon !== null ? (
                 <span>
@@ -205,7 +205,7 @@ export default function CafeDetail({
             href={getCafeDirectionsUrl(cafe)}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-primary text-sm font-bold text-white transition-colors duration-[var(--dm-duration-fast)] hover:bg-primary-deep"
+            className="flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-[10px] bg-primary text-sm font-medium text-white transition-colors duration-[var(--dm-duration-fast)] hover:bg-primary-deep"
           >
             <DirectionsIcon />
             ここへ行く
@@ -215,7 +215,7 @@ export default function CafeDetail({
             type="button"
             onClick={onToggleSave}
             aria-pressed={isSaved}
-            className={`flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-xl border px-4 text-sm font-bold transition-colors duration-[var(--dm-duration-fast)] ${isSaved ? 'border-accent bg-accent-soft text-accent-text' : 'border-border bg-surface text-text hover:border-primary'}`}
+            className={`flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-[10px] border px-4 text-sm font-medium transition-colors duration-[var(--dm-duration-fast)] ${isSaved ? 'border-accent bg-accent-soft text-accent-text' : 'border-border bg-surface text-text hover:border-primary'}`}
           >
             <BookmarkIcon key={String(isSaved)} filled={isSaved} className={`h-5 w-5 ${isSaved ? 'animate-bump' : ''}`} />
             {isSaved ? '保存済み' : '保存'}
@@ -225,7 +225,7 @@ export default function CafeDetail({
             type="button"
             onClick={handleShare}
             aria-label="共有"
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-text transition-colors duration-[var(--dm-duration-fast)] hover:border-primary"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px] border border-border bg-surface text-text transition-colors duration-[var(--dm-duration-fast)] hover:border-primary"
           >
             <ShareIcon className="h-5 w-5" />
           </button>
@@ -243,7 +243,7 @@ export default function CafeDetail({
                 type="button"
                 onClick={() => onSetStatus(id)}
                 aria-pressed={savedStatus === id}
-                className={`h-11 rounded-lg text-[13px] font-bold transition-colors duration-[var(--dm-duration-fast)] ${savedStatus === id ? 'bg-primary-deepest text-cream' : 'text-text-muted hover:text-text'}`}
+                className={`h-11 rounded-lg text-sm font-medium transition-colors duration-[var(--dm-duration-fast)] ${savedStatus === id ? 'bg-primary-deepest text-cream' : 'text-text-muted hover:text-text'}`}
               >
                 {label}
               </button>
@@ -255,18 +255,18 @@ export default function CafeDetail({
 
         {/* 情報行。値が取れないフィールドは行ごと出さない。 */}
         <div className="mt-5 divide-y divide-border border-y border-border">
-          <InfoRow icon={<LocationIcon className="h-[18px] w-[18px]" />} label="住所" href={getCafeMapUrl(cafe)}>
+          <InfoRow icon={<LocationIcon className="h-5 w-5" />} label="住所" href={getCafeMapUrl(cafe)}>
             {formatAddress(cafe.address)}
           </InfoRow>
 
           {cafe.phone && (
-            <InfoRow icon={<PhoneIcon className="h-[18px] w-[18px]" />} label="電話" href={`tel:${cafe.phone.replace(/[^0-9+]/g, '')}`}>
+            <InfoRow icon={<PhoneIcon className="h-5 w-5" />} label="電話" href={`tel:${cafe.phone.replace(/[^0-9+]/g, '')}`}>
               <span className="num">{cafe.phone}</span>
             </InfoRow>
           )}
 
           {domain && website && (
-            <InfoRow icon={<LinkIcon className="h-[18px] w-[18px]" />} label="ウェブサイト" href={website.href}>
+            <InfoRow icon={<LinkIcon className="h-5 w-5" />} label="ウェブサイト" href={website.href}>
               <span className="block truncate">{domain}</span>
             </InfoRow>
           )}
@@ -297,11 +297,11 @@ function InfoRow({
       className="group flex min-h-14 items-center gap-3 py-2.5"
       {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface-sunken text-primary">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-sunken text-primary">
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[11px] leading-none text-text-muted">{label}</span>
+        <span className="block text-xs leading-none text-text-muted">{label}</span>
         <span className="mt-1 block text-sm leading-[1.5] text-text">{children}</span>
       </span>
       <ChevronRightIcon className="h-4 w-4 shrink-0 text-text-muted transition-transform duration-[var(--dm-duration-fast)] group-hover:translate-x-0.5" />

@@ -9,7 +9,7 @@ import "./globals.css";
 // unicode-range に分割するので、既定の preload: true だと <link rel="preload"> が
 // 350 本以上出て初回の帯域を地図と検索 API から奪う（実測 5.3MB）。
 // display: 'swap' + fallback があれば、必要な範囲だけ遅れて読み込まれる。
-// ウェイトは実際に使っている 3 つだけ（font-normal / font-medium / font-bold）。
+// ウェイトは実際に使っている 3 つだけ（font-normal / font-medium / font-medium）。
 const rounded = M_PLUS_Rounded_1c({
   variable: "--font-sans",
   subsets: ["latin"],

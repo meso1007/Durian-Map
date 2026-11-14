@@ -58,8 +58,8 @@ export default function CafeList({
       {isLoading && (
         <div className="animate-pulse px-3 md:px-4" aria-hidden>
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="flex items-center gap-3.5 p-2">
-              <div className="h-[88px] w-[88px] shrink-0 rounded-2xl bg-surface-sunken" />
+            <div key={i} className="flex items-center gap-3 p-2">
+              <div className="h-[88px] w-[88px] shrink-0 rounded-lg bg-surface-sunken" />
               <div className="flex-1 space-y-2.5">
                 <div className="h-4 w-3/5 rounded-full bg-surface-sunken" />
                 <div className="h-3 w-2/5 rounded-full bg-surface-sunken" />

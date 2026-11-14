@@ -42,11 +42,11 @@ export default function ViewSwitch({
       <div
         role="tablist"
         aria-label="表示の切り替え"
-        className="relative grid grid-cols-2 rounded-full bg-surface-sunken p-1"
+        className="relative grid grid-cols-2 rounded-xl bg-surface-sunken p-1"
       >
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-primary-deepest transition-transform duration-[var(--dm-duration-base)] ease-out"
+          className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-lg bg-primary-deepest transition-transform duration-[var(--dm-duration-base)] ease-out"
           style={{ transform: `translateX(${activeIndex * 100}%)` }}
         />
 
@@ -75,12 +75,12 @@ export default function ViewSwitch({
                   moveFocus(index, -1);
                 }
               }}
-              className={`relative z-10 flex h-11 items-center justify-center gap-1.5 rounded-full text-sm font-bold transition-colors duration-[var(--dm-duration-fast)] ${isActive ? 'text-cream' : 'text-text-muted hover:text-text'}`}
+              className={`relative z-10 flex h-11 items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition-colors duration-[var(--dm-duration-fast)] ${isActive ? 'text-cream' : 'text-text-muted hover:text-text'}`}
             >
               {label}
               {id === 'saved' && savedCount > 0 && (
                 <span
-                  className={`num min-w-5 rounded-full px-1.5 text-[11px] leading-5 ${isActive ? 'bg-cream text-primary-deepest' : 'bg-accent-soft text-accent-text'}`}
+                  className={`num min-w-5 rounded-full px-1.5 text-xs leading-5 ${isActive ? 'bg-cream text-primary-deepest' : 'bg-accent-soft text-accent-text'}`}
                 >
                   {savedCount}
                   <span className="sr-only">件</span>

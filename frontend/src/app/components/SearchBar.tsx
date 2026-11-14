@@ -82,7 +82,7 @@ export default function SearchBar({
   };
 
   return (
-    <div className="pointer-events-auto absolute inset-x-3 top-[calc(0.5rem+env(safe-area-inset-top))] z-30 animate-pop md:static md:rounded-t-3xl md:bg-primary-deepest md:p-4 md:shadow-float">
+    <div className="pointer-events-auto absolute inset-x-3 top-[calc(0.5rem+env(safe-area-inset-top))] z-30 md:static md:rounded-t-[20px] md:bg-primary-deepest md:p-4 md:shadow-float">
       {/*
         ブランドロックアップ（PC）。マークがワードマークの "D" を兼ねるので、
         表示テキストは "urian Map"、読み上げは aria-label で "Durian Map" にする。
@@ -90,11 +90,8 @@ export default function SearchBar({
       */}
       <h1 className="sr-only md:not-sr-only md:mb-3 md:flex md:items-center" aria-label="Durian Map">
         <BrandMark tone="dark" className="hidden h-11 w-11 shrink-0 md:block" />
-        <span aria-hidden className="hidden font-display text-[26px] font-bold leading-none text-cream md:-ml-1 md:block">
+        <span aria-hidden className="hidden font-display text-2xl font-bold leading-none text-cream md:-ml-1 md:block">
           urian Map
-        </span>
-        <span aria-hidden className="ml-auto hidden text-xs font-medium text-cream/80 md:block">
-          チェーンじゃない、あの一杯へ。
         </span>
       </h1>
 
@@ -104,7 +101,7 @@ export default function SearchBar({
           event.preventDefault();
           submit(activeIndex >= 0 && showSuggestions ? suggestions[activeIndex].name : value);
         }}
-        className="relative flex h-14 items-center gap-1 rounded-2xl bg-surface pl-2 pr-2 shadow-float outline-offset-2 outline-primary has-[input:focus-visible]:outline-2 md:shadow-none md:outline-lime"
+        className="relative flex h-14 items-center gap-1 rounded-2xl bg-surface pl-2 pr-2 md:rounded-[10px] shadow-float outline-offset-2 outline-primary has-[input:focus-visible]:outline-2 md:shadow-none md:outline-lime"
       >
         <BrandMark className="h-9 w-9 shrink-0 md:hidden" />
         <SearchIcon className="ml-2 hidden h-5 w-5 shrink-0 text-text-muted md:block" />
@@ -209,7 +206,7 @@ export default function SearchBar({
           aria-label="エリアの候補"
           hidden={!showSuggestions}
           onMouseDown={(event) => event.preventDefault()}
-          className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-40 animate-pop overflow-hidden rounded-2xl bg-surface p-1.5 shadow-float"
+          className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-40 animate-pop overflow-hidden rounded-xl bg-surface p-1.5 shadow-float"
         >
           {suggestions.map(({ name, recent }, index) => (
             <li
@@ -218,7 +215,7 @@ export default function SearchBar({
               role="option"
               aria-selected={index === activeIndex}
               onClick={() => submit(name)}
-              className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 text-[15px] text-text ${index === activeIndex ? 'bg-surface-sunken outline-2 -outline-offset-2 outline-primary' : 'hover:bg-surface-sunken'}`}
+              className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 text-sm text-text ${index === activeIndex ? 'bg-surface-sunken outline-2 -outline-offset-2 outline-primary' : 'hover:bg-surface-sunken'}`}
             >
               <span className="text-text-muted">{recent ? <HistoryIcon /> : <LocationIcon />}</span>
               {name}

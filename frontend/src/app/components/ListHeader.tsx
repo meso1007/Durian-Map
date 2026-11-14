@@ -53,7 +53,7 @@ export default function ListHeader({
   return (
     <div className="shrink-0 pb-2">
       <div className="flex min-h-11 items-center gap-3 px-5 md:px-6">
-        <h2 className="min-w-0 flex-1 truncate text-[22px] font-bold leading-[1.4] text-text">
+        <h2 className="min-w-0 flex-1 truncate text-xl font-bold leading-[1.4] text-text">
           {title}
           {count !== null && (
             <span className="ml-2 text-sm font-medium text-text-muted">
@@ -125,7 +125,7 @@ function Chip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`relative inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-[13px] font-medium transition-colors duration-[var(--dm-duration-fast)] before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] ${active
+      className={`relative inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[10px] border px-3 text-sm font-medium transition-colors duration-[var(--dm-duration-fast)] before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] ${active
         ? 'border-primary-deepest bg-primary-deepest text-cream'
         : 'border-border bg-surface text-text hover:border-primary'}`}
     >

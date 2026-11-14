@@ -19,14 +19,14 @@ export default function EmptyState({ title, description, action }: EmptyCopy) {
       <div className="flex h-20 w-20 items-center justify-center rounded-full bg-surface-sunken">
         <BrandMark className="h-12 w-12" />
       </div>
-      <p className="mt-5 text-base font-bold text-text">{title}</p>
+      <p className="mt-5 text-base font-medium text-text">{title}</p>
       <p className="mt-2 max-w-[28ch] text-sm leading-[1.7] text-text-muted">{description}</p>
 
       {action && (
         <button
           type="button"
           onClick={action.onClick}
-          className="mt-5 inline-flex min-h-11 items-center rounded-xl border border-border bg-surface px-5 text-sm font-bold text-text transition-colors duration-[var(--dm-duration-fast)] hover:border-primary hover:bg-surface-sunken"
+          className="mt-5 inline-flex min-h-11 items-center rounded-[10px] border border-border bg-surface px-5 text-sm font-medium text-text transition-colors duration-[var(--dm-duration-fast)] hover:border-primary hover:bg-surface-sunken"
         >
           {action.label}
         </button>
