@@ -101,6 +101,7 @@
 - **地図に重ねる面を足したら `lib/layout.ts` の `getMapInsets()` を見直す**。地図は全面に敷いてあり、
   視点の寄せ方・Google のロゴの位置・再検索の半径がすべてこの値で決まる。CSS 側の幅や高さ
   （`page.tsx` の `md:w-[416px]`、`globals.css` の `.dm-sheet`）とそろっていないと、選んだ店がパネルの下に入る
+- 写真は 1 軒につき最大 5 枚（`index.ts` の `MAX_PHOTOS_PER_CAFE`）。1 枚ごとに課金されるので、増やさない。複数枚を使うのは iOS の詳細だけで、表示したページしか読み込まない
 - 写真のサイズは一覧 200 / 詳細 800 の 2 種類だけ（サイズごとに別キャッシュになり、Places の写真課金が増える）
 - 本番ビルドの `NEXT_PUBLIC_*` は `package.json` の `build:prod` で明示指定する（`.env.local` が優先されて localhost が焼き込まれるのを防ぐ）
 
@@ -111,7 +112,7 @@
 | `project.yml` | `xcodegen generate` で `DurianMap.xcodeproj` を作る（生成物はコミットしない） |
 | `DurianMap/Core.swift` | モデル・API・表示用の整形・共有 / AI のプロンプト・現在地・画面の状態（`AppModel`） |
 | `DurianMap/Views.swift` | 全面の地図 + 検索バー + 標準のシート（一覧・初回表示） |
-| `DurianMap/Detail.swift` | 詳細と、時計の文字盤の営業時間 |
+| `DurianMap/Detail.swift` | 詳細。スクロールせず 1 画面に収める（写真のスワイプ・今日の営業時間 1 行・地図 / 電話 / サイト / 共有のボタン） |
 
 - ガラスは OS 標準の部品（シート・`.buttonStyle(.glass)`・`.glassEffect`）に任せる。自前で半透明やぼかしを再現しない
 - 色は `Brand`（`DurianMapApp.swift`）経由で使う。ライト / ダークで切り替わる。固定の濃緑を文字に使わない（ダークで読めない）

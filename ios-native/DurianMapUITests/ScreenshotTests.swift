@@ -38,7 +38,7 @@ final class ScreenshotTests: XCTestCase {
         shot("\(scheme)-3-filtered")
         if openNow.exists { openNow.tap(); sleep(1) }
 
-        let firstRow = app.scrollViews.buttons.element(boundBy: 6)
+        let firstRow = app.buttons.matching(identifier: "cafe-row").firstMatch
         if firstRow.exists { firstRow.tap() }
         sleep(4)
 

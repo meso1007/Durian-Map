@@ -14,8 +14,9 @@ const SEARCH_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 日
  * v2: weekdayDescriptions / phone を追加
  * v3: priceLevel を追加
  * v4: periods を保存して openNow をレスポンス時に計算する形へ。キーを SHA-256 に
+ * v5: photoNames（詳細でスワイプして見る写真）を追加
  */
-const SCHEMA_VERSION = 'v4';
+const SCHEMA_VERSION = 'v5';
 
 export type SearchKeyParams =
     | { mode: 'nearby'; category: string; lat: number; lng: number; radius: number }

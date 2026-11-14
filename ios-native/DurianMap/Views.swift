@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var detent: PresentationDetent = .medium
     @State private var searchText = ""
     @FocusState private var searchFocused: Bool
+    @State private var locationManager = CLLocationManager()
 
     private static let tokyo = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 35.6762, longitude: 139.6503),
@@ -42,13 +43,21 @@ struct ContentView: View {
         }
         .mapControls { MapCompass() }
         .safeAreaInset(edge: .top) { searchBar }
-        // 「AI に相談」はシートのすぐ上に置く（シートの高さは段で変わる。半分の段では画面の半分）。
+        // 地図の上のボタン（左: AI に相談 / 右: 現在地へ戻る）。シートのすぐ上に置く（シートの高さは段で変わる）。
         .overlay {
             GeometryReader { geometry in
-                askAI
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                    .padding(.leading, 12)
-                    .padding(.bottom, detent == Self.peek ? 108 : geometry.size.height * 0.5 + 12)
+                HStack {
+                    AskAIMenu()
+                    Spacer()
+                    Button(action: goToCurrentLocation) { Image(systemName: "location").font(.body.weight(.medium)).foregroundStyle(Color.primary).frame(width: 44, height: 44) }
+                        .buttonStyle(.plain)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                        .accessibilityLabel("現在地へ戻る")
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .padding(.horizontal, 12)
+                .padding(.bottom, detent == Self.peek ? 108 : geometry.size.height * 0.5 + 44)
+                .opacity(detent == .large ? 0 : 1)
             }
             .ignoresSafeArea()
         }
@@ -88,7 +97,7 @@ struct ContentView: View {
 
             if model.phase != .idle || model.tab == .saved {
                 Button { model.searchNearby(); detent = .medium } label: {
-                    if model.isLocating { ProgressView() } else { Image(systemName: "location.fill") }
+                    if model.isLocating { ProgressView() } else { Image(systemName: "location.magnifyingglass") }
                 }
                 .accessibilityLabel("近くからさがす")
             }
@@ -100,27 +109,17 @@ struct ContentView: View {
         .padding(.top, 4)
     }
 
-    // AI に相談。いまの画面の内容を入れたプロンプトで、外部の AI チャットを開く。
-    private var askAI: some View {
-        let prompt = Sharing.prompt(title: model.phase == .idle && model.tab == .search ? nil : model.title, cafes: model.visible, selected: model.selected)
-        return Menu {
-            Link("ChatGPT で開く", destination: Sharing.aiURL("https://chatgpt.com/", prompt: prompt))
-            Link("Claude で開く", destination: Sharing.aiURL("https://claude.ai/new", prompt: prompt))
-            Button("プロンプトをコピー") {
-                UIPasteboard.general.string = prompt
-                model.notice = "プロンプトをコピーしました"
-            }
-        } label: {
-            Label("AI に相談", systemImage: "bubble.left.and.text.bubble.right")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 14)
-                .frame(height: 44)
+    /// 現在地へ戻る。現在地はシートに隠れない上半分に出す（中心を下へずらす）。
+    private func goToCurrentLocation() {
+        guard let here = locationManager.location?.coordinate else {
+            locationManager.requestWhenInUseAuthorization()
+            withAnimation { camera = .userLocation(fallback: .automatic) }
+            return
         }
-        // メニューのラベルはアクセント色になるので、本文の色に戻す（ガラスの上で読めるように）。
-        .tint(.primary)
-        .glassEffect(.regular.interactive(), in: .capsule)
-        .opacity(detent == .large ? 0 : 1)
+        let span = 0.012
+        withAnimation { camera = .region(MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: here.latitude - span * 0.28, longitude: here.longitude),
+            span: MKCoordinateSpan(latitudeDelta: span, longitudeDelta: span))) }
     }
 
     @ViewBuilder private var noticeView: some View {
@@ -263,10 +262,12 @@ struct SheetContent: View {
 
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .center, spacing: 8) {
                     Text(model.title).font(.title3.bold()).lineLimit(1)
                     if model.tab == .search, model.phase == .loaded { Text("\(cafes.count)件").font(.subheadline).foregroundStyle(.secondary) }
                     Spacer()
+                    // シートを全面にすると地図の上のボタンが隠れるので、一覧にも置く。
+                    if !cafes.isEmpty { AskAIMenu() }
                     // 保存の一覧（いま見えている分）を、文章と一覧のリンクにして友達に送る。
                     if model.tab == .saved, !cafes.isEmpty {
                         ShareLink(item: Sharing.text(title: Sharing.title(cafes), cafes: cafes)) { Text("友達に送る").font(.subheadline.weight(.medium)) }
@@ -299,7 +300,7 @@ struct SheetContent: View {
                     emptyState
                 } else {
                     ForEach(cafes) { cafe in
-                        Button { model.selected = cafe; detent = .large } label: { CafeRow(cafe: cafe) }.buttonStyle(.plain)
+                        Button { model.selected = cafe; detent = .large } label: { CafeRow(cafe: cafe) }.buttonStyle(.plain).accessibilityIdentifier("cafe-row")
                     }
                 }
             }
@@ -329,6 +330,31 @@ struct SheetContent: View {
         if case .failed = model.phase, let query = model.query {
             Button("もう一度さがす") { model.search(query) }.buttonStyle(.glass).frame(maxWidth: .infinity)
         }
+    }
+}
+
+/// AI に相談。いまの画面の内容を入れたプロンプトで、外部の AI チャットを開く。印だけの丸いボタン。
+struct AskAIMenu: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let prompt = Sharing.prompt(title: model.phase == .idle && model.tab == .search ? nil : model.title, cafes: model.visible, selected: model.selected)
+        Menu {
+            Section("AI に相談") {
+                Link("ChatGPT で開く", destination: Sharing.aiURL("https://chatgpt.com/", prompt: prompt))
+                Link("Claude で開く", destination: Sharing.aiURL("https://claude.ai/new", prompt: prompt))
+                Button("プロンプトをコピー", systemImage: "doc.on.doc") {
+                    UIPasteboard.general.string = prompt
+                    model.notice = "プロンプトをコピーしました"
+                }
+            }
+        } label: {
+            Image(systemName: "sparkles").font(.body.weight(.medium)).frame(width: 44, height: 44)
+        }
+        // メニューのラベルはアクセント色になるので、本文の色に戻す（ガラスの上で読めるように）。
+        .tint(.primary)
+        .glassEffect(.regular.interactive(), in: .circle)
+        .accessibilityLabel("AI に相談")
     }
 }
 

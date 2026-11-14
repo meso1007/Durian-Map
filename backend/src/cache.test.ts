@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { buildSearchKey, sha256Hex } from './cache';
 
 describe('buildSearchKey', () => {
-    it('search:v4:<hex64> の形になる', async () => {
+    it('search:v5:<hex64> の形になる', async () => {
         const key = await buildSearchKey({ mode: 'text', category: 'カフェ', area: '渋谷' });
-        expect(key).toMatch(/^search:v4:[0-9a-f]{64}$/);
+        expect(key).toMatch(/^search:v5:[0-9a-f]{64}$/);
     });
 
     it('同じ条件なら同じキー', async () => {

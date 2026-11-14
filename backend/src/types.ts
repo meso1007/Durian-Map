@@ -73,6 +73,8 @@ export type CachedCafe = {
     priceLevel?: string;
     /** Places の写真リソース名。表示は /api/photo 経由で行う（API キーを露出させないため）。 */
     photoName?: string;
+    /** 詳細でスワイプして見る写真（1 枚目を含む、最大 5 枚）。 */
+    photoNames?: string[];
 };
 
 /** フロントエンドに返す 1 件分のカフェ情報。 */
@@ -85,6 +87,8 @@ export type Lead = Omit<CachedCafe, 'periods'> & {
     opensAt?: string;
     /** photoName の HMAC 署名。/api/photo に `sig` として渡す。 */
     photoSig?: string;
+    /** 詳細でスワイプして見る写真。1 枚目は photoName と同じ。署名付き。 */
+    photos?: Array<{ name: string; sig: string }>;
 };
 
 export type SearchResponse = {

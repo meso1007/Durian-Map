@@ -24,6 +24,13 @@ struct Cafe: Codable, Identifiable, Hashable {
     var priceLevel: String?
     var photoName: String?
     var photoSig: String?
+    /// 詳細でスワイプして見る写真（1 枚目を含む、最大 5 枚）。古いレスポンスや保存データには無い。
+    var photos: [Photo]?
+
+    struct Photo: Codable, Hashable {
+        let name: String
+        let sig: String
+    }
 
     var coordinate: CLLocationCoordinate2D? {
         guard let lat, let lng else { return nil }
@@ -129,6 +136,16 @@ enum API {
     /// 写真は Worker のプロキシ経由（署名付き）。サイズは一覧 200 / 詳細 800 の 2 種類だけ使う（課金とキャッシュのため）。
     static func photoURL(_ cafe: Cafe, size: Int) -> URL? {
         guard let name = cafe.photoName, let sig = cafe.photoSig else { return nil }
+        return photoURL(name: name, sig: sig, size: size)
+    }
+
+    /// 詳細のスワイプ用。複数枚が無ければ 1 枚目だけを返す。
+    static func photoURLs(_ cafe: Cafe, size: Int) -> [URL] {
+        if let photos = cafe.photos, !photos.isEmpty { return photos.compactMap { photoURL(name: $0.name, sig: $0.sig, size: size) } }
+        return [photoURL(cafe, size: size)].compactMap { $0 }
+    }
+
+    private static func photoURL(name: String, sig: String, size: Int) -> URL? {
         var components = URLComponents(url: base.appending(path: "api/photo"), resolvingAgainstBaseURL: false)!
         components.queryItems = [
             URLQueryItem(name: "name", value: name), URLQueryItem(name: "sig", value: sig),
