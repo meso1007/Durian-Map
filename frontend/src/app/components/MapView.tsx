@@ -75,7 +75,6 @@ export default function MapView(props: MapViewProps) {
         backgroundColor={MAP_BACKGROUND}
         disableDefaultUI
         clickableIcons={false}
-        keyboardShortcuts={false}
         gestureHandling="greedy"
         className="h-full w-full"
         onClick={onClearSelection}
@@ -89,6 +88,7 @@ export default function MapView(props: MapViewProps) {
           onSelectCafe={onSelectCafe}
         />
         <ResearchPrompt searchToken={searchToken} insets={insets} onSearchThisArea={onSearchThisArea} />
+        <ZoomButtons insets={insets} />
       </Map>
     </APIProvider>
   );
@@ -192,6 +192,37 @@ function ResearchPrompt({
       >
         <SearchIcon className="h-4 w-4" />
         このエリアで再検索
+      </button>
+    </div>
+  );
+}
+
+/**
+ * 拡大・縮小のボタン。ピンチやキーボードが使えなくても地図を動かせるようにする
+ * （Google 既定のコントロールは見た目を合わせられないので、自前で置く）。
+ * 置く場所は、UI に覆われていない領域の右下。
+ */
+function ZoomButtons({ insets }: Pick<MapViewProps, 'insets'>) {
+  const map = useMap();
+  if (!map) return null;
+
+  const zoomBy = (delta: number) => map.setZoom((map.getZoom() ?? 15) + delta);
+
+  return (
+    <div
+      className="absolute z-20 flex flex-col overflow-hidden rounded-2xl bg-surface shadow-float"
+      style={{ right: insets.right + 12, bottom: insets.bottom + 36 }}
+    >
+      <button type="button" onClick={() => zoomBy(1)} aria-label="地図を拡大" className="flex h-11 w-11 items-center justify-center text-text hover:bg-surface-sunken focus-visible:-outline-offset-2">
+        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+          <path strokeLinecap="round" strokeWidth={2} d="M12 5v14M5 12h14" />
+        </svg>
+      </button>
+      <span aria-hidden className="h-px bg-border" />
+      <button type="button" onClick={() => zoomBy(-1)} aria-label="地図を縮小" className="flex h-11 w-11 items-center justify-center text-text hover:bg-surface-sunken focus-visible:-outline-offset-2">
+        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+          <path strokeLinecap="round" strokeWidth={2} d="M5 12h14" />
+        </svg>
       </button>
     </div>
   );

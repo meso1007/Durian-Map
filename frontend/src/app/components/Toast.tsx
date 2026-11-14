@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertIcon, CheckIcon } from './icons';
+import { AlertIcon, CheckIcon, CloseIcon } from './icons';
 import type { Toast as ToastValue } from '@/hooks/useToast';
 
 /**
@@ -9,7 +9,7 @@ import type { Toast as ToastValue } from '@/hooks/useToast';
  * 領域は常に DOM に置く。role="status" の要素ごと出し入れすると読み上げが安定しないため。
  * エラーは --dm-error、完了は濃い面 + ライムの印（どちらも白系の文字で 4.5:1 以上）。
  */
-export default function Toast({ toast }: { toast: ToastValue | null }) {
+export default function Toast({ toast, onDismiss }: { toast: ToastValue | null; onDismiss: () => void }) {
   return (
     <div
       role="status"
@@ -20,7 +20,7 @@ export default function Toast({ toast }: { toast: ToastValue | null }) {
         <div
           // 同じ文言が続けて出ても動きをやり直す
           key={`${toast.tone}:${toast.message}`}
-          className={`flex max-w-md animate-pop items-center gap-2.5 rounded-2xl px-4 py-3 text-sm font-bold shadow-float ${toast.tone === 'error' ? 'bg-error text-white' : 'bg-primary-deepest text-cream'}`}
+          className={`pointer-events-auto flex max-w-md animate-pop items-center gap-2.5 rounded-2xl px-4 py-3 text-sm font-bold shadow-float ${toast.tone === 'error' ? 'bg-error text-white' : 'bg-primary-deepest text-cream'}`}
         >
           {toast.tone === 'error' ? (
             <AlertIcon className="h-5 w-5 shrink-0" />
@@ -30,6 +30,16 @@ export default function Toast({ toast }: { toast: ToastValue | null }) {
             </span>
           )}
           <span>{toast.message}</span>
+          {toast.tone === 'error' && (
+            <button
+              type="button"
+              onClick={onDismiss}
+              aria-label="閉じる"
+              className="-my-2 -mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-white"
+            >
+              <CloseIcon className="h-4 w-4" />
+            </button>
+          )}
         </div>
       )}
     </div>

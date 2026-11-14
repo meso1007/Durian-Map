@@ -9,10 +9,14 @@ import EmptyState from './EmptyState';
 import type { EmptyCopy } from './EmptyState';
 
 type Props = {
+  /** 一覧の見出しと絞り込み。一覧と一緒にスクロールさせる。 */
+  header: React.ReactNode;
   cafes: Cafe[];
   isLoading: boolean;
   currentLocation: Coordinates | null;
   getSavedStatus: (cafeId: string) => SavedStatus | undefined;
+  /** 保存の状態バッジを出すか。保存の一覧を状態で絞り込んでいる間は、全部同じなので出さない。 */
+  showSavedBadge: boolean;
   onSelect: (id: string) => void;
   /** 0 件のときの表示。状況（絞り込み過多 / 保存なし / 失敗）で変える。 */
   empty: EmptyCopy;
@@ -21,11 +25,19 @@ type Props = {
   listRef: React.RefObject<HTMLDivElement | null>;
 };
 
+/**
+ * 一覧のスクロール領域。
+ *
+ * 見出しと絞り込みもこの中に入れてある。固定にすると、画面が低いとき（横向き・400% 拡大）に
+ * 固定部分だけで高さを使い切り、カードが 1 枚も見えなくなる（WCAG 1.4.10）。
+ */
 export default function CafeList({
+  header,
   cafes,
   isLoading,
   currentLocation,
   getSavedStatus,
+  showSavedBadge,
   onSelect,
   empty,
   listKey,
@@ -34,19 +46,14 @@ export default function CafeList({
   return (
     <div
       ref={listRef}
-      aria-busy={isLoading}
-      className="dm-scroll flex-1 overflow-y-auto px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:px-4"
+      // 詳細を閉じたとき、戻り先のカードがもう無ければここへフォーカスを返す（useMapSelection）。
+      tabIndex={-1}
+      className="dm-scroll flex-1 overflow-y-auto pb-[calc(1rem+env(safe-area-inset-bottom))] focus-visible:outline-none"
     >
-      {/*
-        件数の読み上げ。スケルトンは aria-hidden なので、読み上げ環境には
-        ここだけが「検索中」「N 件見つかりました」として届く。
-      */}
-      <span className="sr-only" role="status" aria-live="polite">
-        {isLoading ? '検索中' : `${cafes.length}件見つかりました`}
-      </span>
+      {header}
 
       {isLoading && (
-        <div className="animate-pulse" aria-hidden>
+        <div className="animate-pulse px-3 md:px-4" aria-hidden>
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="flex items-center gap-3.5 p-2">
               <div className="h-[88px] w-[88px] shrink-0 rounded-2xl bg-surface-sunken" />
@@ -61,18 +68,19 @@ export default function CafeList({
       )}
 
       {!isLoading && cafes.length > 0 && (
-        <div key={listKey} className="flex flex-col gap-0.5">
+        <ul key={listKey} className="flex flex-col gap-0.5 px-3 pt-1 md:px-4">
           {cafes.map((cafe, index) => (
-            <CafeCard
-              key={cafe.id}
-              cafe={cafe}
-              index={index}
-              distance={getDistanceMeters(currentLocation, cafe)}
-              savedStatus={getSavedStatus(cafe.id)}
-              onSelect={onSelect}
-            />
+            <li key={cafe.id}>
+              <CafeCard
+                cafe={cafe}
+                index={index}
+                distance={getDistanceMeters(currentLocation, cafe)}
+                savedStatus={showSavedBadge ? getSavedStatus(cafe.id) : undefined}
+                onSelect={onSelect}
+              />
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
       {!isLoading && cafes.length === 0 && <EmptyState {...empty} />}

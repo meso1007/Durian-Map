@@ -33,7 +33,7 @@ import type { TabId } from './components/ViewSwitch';
  * レイアウトの切り替えは CSS（md:）だけで行い、JS が知るのは「地図のどこが覆われているか」だけ。
  */
 function CafeFinderContent() {
-  const { toast, showError, showNotice } = useToast();
+  const { toast, showError, showNotice, dismissToast } = useToast();
   const { state: searchState, query, search, completedCount, results, isLoading, hasSearched } = useCafeSearch(showError);
 
   // URL を状態の正にする。マウント時の URL が初期状態になり、以降は状態が変わるたびに
@@ -172,7 +172,7 @@ function CafeFinderContent() {
   }, [selectedId, closeDetail]);
 
   return (
-    <div className="relative isolate h-dvh w-full overflow-hidden bg-map-land text-text">
+    <main className="relative isolate h-dvh w-full overflow-hidden bg-map-land text-text">
       <MapArea
         cafes={filters.cafes}
         selectedId={selectedId}
@@ -249,8 +249,8 @@ function CafeFinderContent() {
         </Sheet>
       </div>
 
-      <Toast toast={toast} />
-    </div>
+      <Toast toast={toast} onDismiss={dismissToast} />
+    </main>
   );
 }
 

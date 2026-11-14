@@ -220,7 +220,7 @@ export default function CafeDetail({
                 type="button"
                 onClick={() => onSetStatus(id)}
                 aria-pressed={savedStatus === id}
-                className={`h-10 rounded-lg text-[13px] font-bold transition-colors duration-[var(--dm-duration-fast)] ${savedStatus === id ? 'bg-surface text-text shadow-card' : 'text-text-muted hover:text-text'}`}
+                className={`h-11 rounded-lg text-[13px] font-bold transition-colors duration-[var(--dm-duration-fast)] ${savedStatus === id ? 'bg-primary-deepest text-cream' : 'text-text-muted hover:text-text'}`}
               >
                 {label}
               </button>

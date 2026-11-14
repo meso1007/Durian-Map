@@ -186,7 +186,7 @@ body {
 .dm-sheet {
   --dm-sheet-top: calc(72px + env(safe-area-inset-top));
   --dm-sheet-full: calc(100dvh - var(--dm-sheet-top));
-  --dm-sheet-peek: min(var(--dm-sheet-full), calc(92px + env(safe-area-inset-bottom)));
+  --dm-sheet-peek: min(var(--dm-sheet-full), calc(96px + env(safe-area-inset-bottom)));
   --dm-sheet-half: min(var(--dm-sheet-full), max(var(--dm-sheet-peek), 50dvh));
   --dm-sheet-visible: var(--dm-sheet-half);
   --dm-sheet-body: var(--dm-sheet-half);

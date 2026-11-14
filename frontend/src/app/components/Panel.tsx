@@ -80,6 +80,14 @@ export default function Panel({
 }: Props) {
   const showWelcome = tab === 'search' && !hasSearched;
   const detailOpen = selectedCafe !== null && shareTargetUrl !== null;
+  const searchLoading = isLoading && tab === 'search';
+
+  // 読み上げ用の状況。未検索・失敗のときは何も言わない（失敗はトーストと空状態が伝える）。
+  const statusText = showWelcome || errorMessage
+    ? ''
+    : searchLoading
+      ? '検索中'
+      : `${filters.cafes.length}件${tab === 'saved' ? '保存しています' : '見つかりました'}`;
 
   return (
     <div
@@ -88,49 +96,58 @@ export default function Panel({
       aria-labelledby={tabButtonId(tab)}
       className="relative flex min-h-0 flex-1 flex-col"
     >
+      {/*
+        件数の読み上げ。常に DOM に置く（あとから差し込んだ live region は読まれないことがある）。
+        スケルトンは aria-hidden なので、読み上げ環境にはここだけが「検索中」「N 件見つかりました」として届く。
+      */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {statusText}
+      </p>
+
       {/* 詳細が開いている間、裏の一覧は操作も読み上げもさせない。 */}
       <div inert={detailOpen} className="flex min-h-0 flex-1 flex-col">
         {showWelcome ? (
           <Welcome recentAreas={recentAreas} isLocating={isLocating} onLocate={onLocate} onSearch={onSearchArea} />
         ) : (
-          <>
-            <ListHeader
-              tab={tab}
-              title={tab === 'saved' ? '保存したカフェ' : searchTitle}
-              count={isLoading && tab === 'search' ? null : filters.cafes.length}
-              showFilters={hasResults && !isLoading}
-              openNowOnly={filters.openNowOnly}
-              onToggleOpenNow={filters.toggleOpenNow}
-              priceFilters={filters.priceFilters}
-              onTogglePrice={filters.togglePrice}
-              savedFilter={filters.savedFilter}
-              onSavedFilterChange={filters.setSavedFilter}
-              savedCounts={filters.savedCounts}
-              showSort={filters.canSortByDistance && filters.cafes.length > 1 && !(isLoading && tab === 'search')}
-              sortByDistance={filters.sortByDistance}
-              onToggleSort={filters.toggleSort}
-            />
-
-            <CafeList
-              cafes={filters.cafes}
-              isLoading={isLoading && tab === 'search'}
-              currentLocation={currentLocation}
-              getSavedStatus={getSavedStatus}
-              onSelect={onSelect}
-              listKey={`${tab}:${searchToken}`}
-              empty={emptyStateCopy({
-                tab,
-                savedFilter: filters.savedFilter,
-                activeFilterCount: filters.activeFilterCount,
-                errorMessage,
-                onClearFilters: filters.clearFilters,
-                onRetry,
-                onShowAllSaved: () => filters.setSavedFilter('all'),
-                onGoSearch,
-              })}
-              listRef={listRef}
-            />
-          </>
+          <CafeList
+            header={
+              <ListHeader
+                tab={tab}
+                title={tab === 'saved' ? '保存したカフェ' : searchTitle}
+                // 保存の一覧は、すぐ下のチップが件数を出す。同じ数を 2 回言わない。
+                count={searchLoading || tab === 'saved' ? null : filters.cafes.length}
+                showFilters={hasResults && !isLoading}
+                openNowOnly={filters.openNowOnly}
+                onToggleOpenNow={filters.toggleOpenNow}
+                priceFilters={filters.priceFilters}
+                onTogglePrice={filters.togglePrice}
+                savedFilter={filters.savedFilter}
+                onSavedFilterChange={filters.setSavedFilter}
+                savedCounts={filters.savedCounts}
+                showSort={filters.canSortByDistance && filters.cafes.length > 1 && !searchLoading}
+                sortByDistance={filters.sortByDistance}
+                onToggleSort={filters.toggleSort}
+              />
+            }
+            cafes={filters.cafes}
+            isLoading={searchLoading}
+            currentLocation={currentLocation}
+            getSavedStatus={getSavedStatus}
+            showSavedBadge={tab === 'search' || filters.savedFilter === 'all'}
+            onSelect={onSelect}
+            listKey={`${tab}:${searchToken}`}
+            empty={emptyStateCopy({
+              tab,
+              savedFilter: filters.savedFilter,
+              activeFilterCount: filters.activeFilterCount,
+              errorMessage,
+              onClearFilters: filters.clearFilters,
+              onRetry,
+              onShowAllSaved: () => filters.setSavedFilter('all'),
+              onGoSearch,
+            })}
+            listRef={listRef}
+          />
         )}
       </div>
 

@@ -62,7 +62,8 @@ export default function Sheet({
           type="button"
           {...handleProps}
           aria-label={`一覧の大きさを変える（${SNAP_LABEL[snap]}）`}
-          className="flex h-5 w-full cursor-grab items-end justify-center active:cursor-grabbing md:hidden"
+          aria-expanded={snap !== 'peek'}
+          className="flex h-6 w-full cursor-grab items-end justify-center focus-visible:-outline-offset-2 active:cursor-grabbing md:hidden"
         >
           <span className="h-1 w-10 rounded-full bg-border" />
         </button>
@@ -70,7 +71,10 @@ export default function Sheet({
         {header}
       </div>
 
-      <div className="relative flex min-h-0 flex-1 flex-col">{children}</div>
+      {/* 閉じている段では中身は画面の外にある。見えないものにフォーカスや読み上げが行かないようにする。 */}
+      <div inert={draggable && snap === 'peek'} className="relative flex min-h-0 flex-1 flex-col">
+        {children}
+      </div>
     </div>
   );
 }

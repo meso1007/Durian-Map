@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 
 import BrandMark from './BrandMark';
 import { CloseIcon, HistoryIcon, LoadingSpinner, LocationIcon, SearchIcon, TargetIcon } from './icons';
@@ -69,22 +69,6 @@ export default function SearchBar({
   const showSuggestions = open && suggestions.length > 0;
   const isDirty = value.trim() !== '' && value.trim() !== area;
 
-  // 「/」で検索欄へ。入力中の欄があるときは奪わない。
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
-
-      const target = event.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
-
-      event.preventDefault();
-      inputRef.current?.focus();
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-
   const submit = (next: string) => {
     const name = next.trim();
     if (!name) return;
@@ -92,7 +76,8 @@ export default function SearchBar({
     setValue(name);
     setOpen(false);
     setActiveIndex(-1);
-    inputRef.current?.blur();
+    // タッチ端末ではソフトキーボードを閉じて結果を見せる。キーボード操作ではフォーカスを奪わない。
+    if (window.matchMedia('(pointer: coarse)').matches) inputRef.current?.blur();
     onSearch(name);
   };
 
@@ -175,7 +160,7 @@ export default function SearchBar({
               setValue('');
               inputRef.current?.focus();
             }}
-            className="flex h-11 w-9 shrink-0 items-center justify-center rounded-full text-text-muted hover:text-text"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-text-muted hover:text-text"
           >
             <CloseIcon className="h-4 w-4" />
           </button>
@@ -230,11 +215,13 @@ export default function SearchBar({
               role="option"
               aria-selected={index === activeIndex}
               onClick={() => submit(name)}
-              className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 text-[15px] text-text ${index === activeIndex ? 'bg-surface-sunken' : 'hover:bg-surface-sunken'}`}
+              className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 text-[15px] text-text ${index === activeIndex ? 'bg-surface-sunken outline-2 -outline-offset-2 outline-primary' : 'hover:bg-surface-sunken'}`}
             >
               <span className="text-text-muted">{recent ? <HistoryIcon /> : <LocationIcon />}</span>
               {name}
-              {recent && <span className="ml-auto text-xs text-text-muted">最近の検索</span>}
+              {recent && <span className="ml-auto text-xs text-text-muted">
+                <span className="sr-only">、</span>最近の検索
+              </span>}
             </li>
           ))}
         </ul>

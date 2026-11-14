@@ -76,7 +76,7 @@ export default function ListHeader({
       )}
 
       {tab === 'search' && showFilters && (
-        <div role="group" aria-label="絞り込み" className="no-scrollbar mt-1 flex gap-2 overflow-x-auto px-5 md:px-6">
+        <div role="group" aria-label="絞り込み" className="no-scrollbar flex gap-2 overflow-x-auto px-5 py-1 md:px-6">
           <Chip active={openNowOnly} onClick={onToggleOpenNow}>
             <span className={`h-1.5 w-1.5 rounded-full ${openNowOnly ? 'bg-lime' : 'bg-success'}`} />
             営業中
@@ -91,7 +91,7 @@ export default function ListHeader({
       )}
 
       {tab === 'saved' && savedCounts.all > 0 && (
-        <div role="group" aria-label="保存した状態で絞り込む" className="no-scrollbar mt-1 flex gap-2 overflow-x-auto px-5 md:px-6">
+        <div role="group" aria-label="保存した状態で絞り込む" className="no-scrollbar flex gap-2 overflow-x-auto px-5 py-1 md:px-6">
           {(
             [
               { id: 'all', label: 'すべて', count: savedCounts.all },

@@ -12,7 +12,7 @@ export type SheetSnap = 'peek' | 'half' | 'full';
 export const SHEET_SNAPS: readonly SheetSnap[] = ['peek', 'half', 'full'];
 
 /** peek で見せる高さ（ハンドル + 切り替えの行）。セーフエリアは呼び出し側で足す。 */
-export const SHEET_PEEK_HEIGHT = 92;
+export const SHEET_PEEK_HEIGHT = 96;
 
 /** これより速く払ったら、位置に関係なく払った向きの隣の段へ送る（px/ms）。 */
 const FLING_VELOCITY = 0.45;
@@ -58,9 +58,12 @@ export function resolveSnap(
     );
 }
 
-/** ハンドルをタップ / Enter したときの次の段。peek → half → full → half と往復する。 */
+/**
+ * ハンドルをタップ / Enter したときの次の段。half → full → peek → half と一巡する。
+ * ドラッグできない人（単一のタップしか使えない人）も、すべての段に届くようにするため。
+ */
 export function nextSnap(current: SheetSnap): SheetSnap {
-    return current === 'half' ? 'full' : 'half';
+    return current === 'half' ? 'full' : current === 'full' ? 'peek' : 'half';
 }
 
 /** 端を越えて引いたときの手応え。越えた分は 1/4 しか動かさない。 */

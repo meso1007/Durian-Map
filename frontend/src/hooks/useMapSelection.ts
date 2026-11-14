@@ -57,7 +57,11 @@ export function useMapSelection(initialSelectedId: string | null = null) {
         // パネルが消えてカードが並び直るのを待ってからフォーカスする。
         window.requestAnimationFrame(() => {
             const card = listRef.current?.querySelector<HTMLElement>(`[data-id="${CSS.escape(previousId)}"]`);
-            card?.focus({ preventScroll: true });
+
+            // カードがもう無い（保存を解除した等）ときは、一覧そのものへ戻す。body に落とさない。
+            (card ?? listRef.current)?.focus({ preventScroll: true });
+            // 地図のピンから選んだ場合、一覧はその店まで動いていない。見える位置へ寄せる。
+            card?.scrollIntoView({ block: 'nearest' });
         });
     }, [selectedId, clear]);
 

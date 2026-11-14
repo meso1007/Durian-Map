@@ -6,11 +6,11 @@ const heights = getSnapHeights(844, { topInset: 76, bottomInset: 0 });
 
 describe('getSnapHeights', () => {
     it('3 段を peek < half < full の順に並べる', () => {
-        expect(heights).toEqual({ peek: 92, half: 422, full: 768 });
+        expect(heights).toEqual({ peek: 96, half: 422, full: 768 });
     });
 
     it('セーフエリアの分だけ peek を高くする', () => {
-        expect(getSnapHeights(844, { topInset: 76, bottomInset: 34 }).peek).toBe(126);
+        expect(getSnapHeights(844, { topInset: 76, bottomInset: 34 }).peek).toBe(130);
     });
 
     it('低い画面でも half が full を越えない', () => {
@@ -45,10 +45,10 @@ describe('resolveSnap', () => {
 });
 
 describe('nextSnap', () => {
-    it('half と full を往復し、peek からは half に開く', () => {
-        expect(nextSnap('peek')).toBe('half');
+    it('half → full → peek → half と一巡する', () => {
         expect(nextSnap('half')).toBe('full');
-        expect(nextSnap('full')).toBe('half');
+        expect(nextSnap('full')).toBe('peek');
+        expect(nextSnap('peek')).toBe('half');
     });
 });
 
@@ -59,6 +59,6 @@ describe('rubberBand', () => {
 
     it('端を越えた分は 1/4 だけ動かす', () => {
         expect(rubberBand(808, heights)).toBe(778);
-        expect(rubberBand(52, heights)).toBe(82);
+        expect(rubberBand(56, heights)).toBe(86);
     });
 });
