@@ -67,6 +67,8 @@ export default function MapFallback({
         {placed.map(({ cafe, x, y }) => {
           const state: PinState = cafe.id === selectedId ? 'selected' : cafe.id === hoveredId ? 'hover' : 'default';
           const colors = getPinColors(cafe.openNow, state);
+          const featured = featuredIds.has(cafe.id);
+          const pill = showsRating(cafe.rating, featured, state) && cafe.rating != null;
 
           return (
             <button
@@ -83,32 +85,40 @@ export default function MapFallback({
                 if (event.pointerType === 'mouse') setHoveredCafe(cafe.id);
               }}
               onPointerLeave={() => setHoveredCafe(null)}
-              className="num absolute flex h-7 min-w-7 items-center justify-center gap-1 rounded-full border-2 px-2 text-[13px] font-bold leading-none transition-transform duration-[var(--dm-duration-fast)] ease-out"
+              // 押せる領域は 44px。見た目（札 / 小さな丸）は中の span が持つ。
+              className="absolute flex h-11 min-w-11 items-center justify-center"
               style={{
                 left: `${x}%`,
                 top: `${y}%`,
-                backgroundColor: colors.fill,
-                borderColor: colors.stroke,
-                color: colors.text,
-                zIndex: state === 'selected' ? 3 : state === 'hover' ? 2 : 1,
-                transform: `translate(-50%, -100%) scale(${state === 'selected' ? 1.2 : 1})`,
-                transformOrigin: 'bottom center',
+                transform: 'translate(-50%, -50%)',
+                // 選択 > ホバー > 札 > 丸。札は地図の上で唯一の文字情報なので、丸に隠させない。
+                zIndex: state === 'selected' ? 4 : state === 'hover' ? 3 : featured ? 2 : 1,
               }}
             >
-              {showsRating(cafe.rating, featuredIds.has(cafe.id), state) && cafe.rating != null ? (
-                <>
-                  <StarIcon className="h-3.5 w-3.5" />
-                  {cafe.rating.toFixed(1)}
-                </>
-              ) : (
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: colors.stroke }} />
-              )}
-              {savedIds.has(cafe.id) && (
-                <span
-                  className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2"
-                  style={{ backgroundColor: PIN_SAVED_COLOR, borderColor: colors.fill }}
-                />
-              )}
+              <span
+                className={`num relative flex items-center justify-center gap-1 rounded-full font-bold leading-none transition-transform duration-[var(--dm-duration-fast)] ease-out ${pill ? 'h-7 border-2 px-2 text-[13px]' : 'h-[18px] w-[18px] border-[2.5px]'}`}
+                style={{
+                  backgroundColor: colors.fill,
+                  borderColor: colors.stroke,
+                  color: colors.text,
+                  transform: `scale(${state === 'selected' ? 1.2 : 1})`,
+                }}
+              >
+                {pill ? (
+                  <>
+                    <StarIcon className="h-3.5 w-3.5" />
+                    {cafe.rating!.toFixed(1)}
+                  </>
+                ) : (
+                  <span className="h-[5px] w-[5px] rounded-full" style={{ backgroundColor: colors.stroke }} />
+                )}
+                {savedIds.has(cafe.id) && (
+                  <span
+                    className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2"
+                    style={{ backgroundColor: PIN_SAVED_COLOR, borderColor: colors.fill }}
+                  />
+                )}
+              </span>
             </button>
           );
         })}

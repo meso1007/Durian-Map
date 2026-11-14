@@ -24,29 +24,33 @@ export default function Welcome({
   const popular = POPULAR_AREAS.filter((name) => !recentAreas.includes(name));
 
   return (
-    <div className="dm-scroll flex-1 overflow-y-auto px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-1 md:px-6 md:pt-3">
-      <h2 className="animate-rise text-[28px] font-bold leading-[1.3] tracking-[-0.01em] text-text md:text-[32px]">
+    <div className="dm-scroll @container flex-1 overflow-y-auto px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-1 md:px-6 md:pt-3">
+      {/*
+        コピーをこの画面の主役にする。1 行を幅いっぱいに使う大きさで、行の途中では折り返させない
+        （「チェーンじゃな / い、」のように割れると台無しになる）。幅は cqi（パネルの幅）に合わせる。
+      */}
+      <h2 className="animate-rise whitespace-nowrap text-[min(10.2cqi,44px)] font-bold leading-[1.15] tracking-[-0.02em] text-text">
         チェーンじゃない、
         <br />
         あの一杯へ。
       </h2>
 
-      <p className="mt-3 animate-rise text-[15px] leading-[1.7] text-text-muted [animation-delay:80ms]">
-        大手チェーンを除いて、個人経営の小さなカフェだけを地図に出します。
+      <p className="mt-3 animate-rise text-[13px] leading-[1.6] text-text-muted [animation-delay:80ms]">
+        大手チェーンを除いた、個人経営のカフェだけの地図。
       </p>
 
       <button
         type="button"
         onClick={onLocate}
         disabled={isLocating}
-        className="mt-5 flex min-h-14 w-full animate-rise items-center gap-3 rounded-2xl bg-cta px-4 text-left text-text transition-transform duration-[var(--dm-duration-fast)] [animation-delay:120ms] active:scale-[0.98] disabled:opacity-60"
+        className="mt-4 flex min-h-14 w-full animate-rise items-center gap-3 rounded-2xl bg-cta px-4 text-left text-text transition-transform duration-[var(--dm-duration-fast)] [animation-delay:120ms] active:scale-[0.98] disabled:opacity-60"
       >
         <span className="shrink-0">{isLocating ? <LoadingSpinner /> : <TargetIcon />}</span>
         <span className="min-w-0 flex-1 text-base font-bold">{isLocating ? '現在地を取得中…' : '近くからさがす'}</span>
         <ChevronRightIcon className="h-5 w-5 shrink-0" />
       </button>
 
-      <div className="mt-7 animate-rise [animation-delay:160ms]">
+      <div className="mt-5 animate-rise [animation-delay:160ms]">
         {recentAreas.length > 0 && (
           <AreaGroup title="最近の検索" areas={recentAreas} onSearch={onSearch} recent />
         )}

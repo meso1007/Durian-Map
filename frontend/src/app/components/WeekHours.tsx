@@ -5,8 +5,12 @@ import { useMemo, useState } from 'react';
 import { parseHourRanges } from '@/lib/cafe';
 import type { DayHours } from '@/lib/cafe';
 
-/** 営業時間が 1 つも読み取れなかったときの軸（8:00–20:00）。 */
-const DEFAULT_AXIS = { start: 8 * 60, end: 20 * 60 };
+/**
+ * 軸の既定の範囲（6:00–24:00）。どの店も同じ軸に載せるので、朝の店は柱が上に、夜の店は下に寄り、
+ * 柱の位置と長さがその店の形になる。店ごとに軸を合わせると、毎日同じ時間の店は 7 本とも
+ * 端から端まで塗られて、何も伝わらない。
+ */
+const BASE_AXIS = { start: 6 * 60, end: 24 * 60 };
 
 /** いまの時刻（JST、0:00 からの分）。端末のタイムゾーンに関係なく JST で出す。 */
 function getJstMinutes(now: Date): number {
@@ -14,9 +18,10 @@ function getJstMinutes(now: Date): number {
   return jst.getUTCHours() * 60 + jst.getUTCMinutes();
 }
 
+/** 目盛りの表記（時だけ）。24 時を超える分は折り返す（27 時 → 3）。24 時ちょうどは 24 のまま。 */
 function formatAxisTime(minutes: number): string {
-  // 24 時を超える分（深夜営業）は「翌」を付けずに 24 時間表記で折り返す。
-  return `${Math.floor((minutes % 1440) / 60)}:00`;
+  const hour = minutes / 60;
+  return String(hour > 24 ? hour - 24 : hour);
 }
 
 /**
@@ -33,16 +38,22 @@ export default function WeekHours({ rows }: { rows: DayHours[] }) {
 
   const days = useMemo(() => rows.map((row) => ({ ...row, ranges: parseHourRanges(row.hours) })), [rows]);
 
-  // 軸は、その店の 1 週間でいちばん早い開店からいちばん遅い閉店まで（時単位に丸める）。
+  // 軸は共通。6 時より早く開く店・24 時を過ぎて閉める店のときだけ、その分を広げる（時単位）。
   const axis = useMemo(() => {
     const all = days.flatMap((day) => day.ranges);
-    if (all.length === 0) return DEFAULT_AXIS;
 
     return {
-      start: Math.floor(Math.min(...all.map((range) => range.start)) / 60) * 60,
-      end: Math.ceil(Math.max(...all.map((range) => range.end)) / 60) * 60,
+      start: Math.min(BASE_AXIS.start, ...all.map((range) => Math.floor(range.start / 60) * 60)),
+      end: Math.max(BASE_AXIS.end, ...all.map((range) => Math.ceil(range.end / 60) * 60)),
     };
   }, [days]);
+
+  // 目盛りは 6 時間おき（6 / 12 / 18 / 24 …）。
+  const ticks = useMemo(() => {
+    const values: number[] = [];
+    for (let minutes = Math.ceil(axis.start / 360) * 360; minutes <= axis.end; minutes += 360) values.push(minutes);
+    return values;
+  }, [axis]);
 
   const span = Math.max(axis.end - axis.start, 60);
   const position = (minutes: number) => `${((minutes - axis.start) / span) * 100}%`;
@@ -68,9 +79,12 @@ export default function WeekHours({ rows }: { rows: DayHours[] }) {
 
       <div className="mt-3 flex gap-2">
         {/* 軸の目盛り。上が開店側、下が閉店側。 */}
-        <div aria-hidden className="num flex h-20 w-8 shrink-0 flex-col justify-between text-right text-[11px] leading-none text-text-muted">
-          <span>{formatAxisTime(axis.start)}</span>
-          <span>{formatAxisTime(axis.end)}</span>
+        <div aria-hidden className="num relative h-24 w-6 shrink-0 text-right text-[11px] leading-none text-text-muted">
+          {ticks.map((minutes) => (
+            <span key={minutes} className="absolute right-0 -translate-y-1/2" style={{ top: position(minutes) }}>
+              {formatAxisTime(minutes)}
+            </span>
+          ))}
         </div>
 
         <div className="grid min-w-0 flex-1 grid-cols-7 gap-1.5">
@@ -87,7 +101,7 @@ export default function WeekHours({ rows }: { rows: DayHours[] }) {
                 className="group flex flex-col items-center gap-1.5 rounded-lg pb-1"
               >
                 <span
-                  className={`relative block h-20 w-full overflow-hidden rounded-lg transition-colors duration-[var(--dm-duration-fast)] ${day.isToday ? 'bg-success-soft' : 'bg-surface-sunken'} ${isSelected ? 'outline-2 outline-offset-1 outline-primary-deepest' : 'group-hover:outline-1 group-hover:outline-border'}`}
+                  className={`relative block h-24 w-full overflow-hidden rounded-lg transition-colors duration-[var(--dm-duration-fast)] ${day.isToday ? 'bg-success-soft' : 'bg-surface-sunken'} ${isSelected ? 'outline-2 outline-offset-1 outline-primary-deepest' : 'group-hover:outline-1 group-hover:outline-border'}`}
                 >
                   {day.ranges.map((range) => (
                     <span

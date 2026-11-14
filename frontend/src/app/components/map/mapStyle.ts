@@ -56,7 +56,7 @@ export function samePinData(a: PinData, b: PinData): boolean {
 // （data URI の SVG はページのフォントを使えないので、Co Headline で出すには label が要る）。
 const PILL = { width: 58, height: 38, bodyHeight: 30 };
 // 評価の無い店: 小さな丸いピン。
-const DOT = { width: 26, height: 32 };
+const DOT = { width: 18, height: 18 };
 
 const STAR_PATH = 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z';
 
@@ -83,10 +83,11 @@ function buildDotSvg(data: PinData, state: PinState): string {
     const { width, height } = DOT;
     const middle = width / 2;
 
+    // 札にしない店は、地図を静かに保つために小さな二重丸にする（タップ領域は Marker 側で確保される）。
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-    <path d="M${middle} ${height - 1} C${middle} ${height - 1} 2 19 2 12.5 A${middle - 2} ${middle - 2} 0 1 1 ${width - 2} 12.5 C${width - 2} 19 ${middle} ${height - 1} ${middle} ${height - 1} Z" fill="${fill}" stroke="${stroke}" stroke-width="2" stroke-linejoin="round"/>
-    <circle cx="${middle}" cy="12.5" r="4" fill="${state === 'selected' ? '#B9DC3C' : stroke}"/>
-    ${data.saved ? savedBadge(width - 6, fill) : ''}
+    <circle cx="${middle}" cy="${middle}" r="${middle - 1.5}" fill="${fill}" stroke="${stroke}" stroke-width="2.5"/>
+    <circle cx="${middle}" cy="${middle}" r="2.5" fill="${stroke}"/>
+    ${data.saved ? `<circle cx="${width - 4}" cy="4" r="3.5" fill="${PIN_SAVED_COLOR}" stroke="${fill}" stroke-width="1.5"/>` : ''}
   </svg>`;
 }
 
@@ -105,7 +106,8 @@ export function createCafePinIcon(data: PinData, state: PinState): google.maps.I
     return {
         url: `data:image/svg+xml,${encodeURIComponent(hasRating ? buildPillSvg(data, state) : buildDotSvg(data, state))}`,
         scaledSize: new google.maps.Size(width, height),
-        anchor: new google.maps.Point(width / 2, height),
+        // 札はしっぽの先、丸いピンは中心が、その店の位置を指す。
+        anchor: new google.maps.Point(width / 2, hasRating ? height : height / 2),
         // 数値は星の右。札の縦の中央に置く。
         labelOrigin: new google.maps.Point(36 * scale, (PILL.bodyHeight / 2) * scale),
     };

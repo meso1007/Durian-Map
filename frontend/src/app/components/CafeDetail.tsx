@@ -110,7 +110,7 @@ export default function CafeDetail({
     <article
       ref={scrollRef}
       aria-labelledby="cafe-detail-title"
-      className="dm-scroll absolute inset-0 z-10 animate-push overflow-y-auto bg-surface pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-1 md:pt-4"
+      className="dm-scroll absolute inset-0 z-10 overflow-y-auto bg-surface pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-1 md:pt-4"
     >
       {/*
         写真。無い店は面の色とマークで埋める（壊れた画像や空白にしない）。
@@ -118,12 +118,9 @@ export default function CafeDetail({
       */}
       <div style={{ viewTransitionName: CAFE_PHOTO_TRANSITION }}
         className="relative mx-3 flex h-32 items-center justify-center overflow-hidden rounded-[20px] bg-surface-sunken md:mx-4 md:h-56">
-        <Photo
-          src={photoUrl}
-          alt={`${cafe.name} の写真`}
-          eager
-          fallback={<BrandMark className="h-16 w-16 opacity-40" />}
-        />
+        {/* マークは写真の下に敷いておく。読み込み中も「空の箱」に見えず、写真が無い店ではそのまま残る。 */}
+        <BrandMark className="absolute h-14 w-14 opacity-30" />
+        <Photo src={photoUrl} alt={`${cafe.name} の写真`} eager className="relative" fallback={null} />
 
         <button
           type="button"
@@ -135,7 +132,8 @@ export default function CafeDetail({
         </button>
       </div>
 
-      <div className="px-5 pt-4 md:px-6">
+      {/* 本文は写真より少し遅れて、同じ速さで入る（写真の遷移と別々の動きに見えないように）。 */}
+      <div className="animate-rise px-5 pt-4 [animation-delay:80ms] md:px-6">
         <h2
           id="cafe-detail-title"
           ref={headingRef}
@@ -145,38 +143,61 @@ export default function CafeDetail({
           {cafe.name}
         </h2>
 
-        {(categoryLabel || priceLabel) && (
-          <p className="mt-1 text-sm text-text-muted">
-            {categoryLabel}
-            {categoryLabel && priceLabel && <span aria-hidden> · </span>}
-            {priceLabel && <span className="num">{priceLabel}</span>}
-          </p>
-        )}
-
-        {/* 評価と距離。数値は Co Headline（.num）。 */}
-        <dl className="mt-4 flex divide-x divide-border rounded-2xl bg-surface-sunken py-3">
+        {/*
+          判断に要る値を 1 行で。箱で囲まず、数値（Co Headline）の大きさで主従を付ける。
+          いずれも値が取れたときだけ出す。
+        */}
+        <p className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
           {cafe.rating != null && (
-            <Stat label={cafe.userRatingCount != null ? `${cafe.userRatingCount}件のクチコミ` : 'クチコミ'}>
-              <StarIcon className="h-4 w-4 text-star" />
-              {cafe.rating.toFixed(1)}
-            </Stat>
-          )}
-
-          {distance != null && (
-            <Stat label={`徒歩${formatWalkingMinutes(distance)}`}>{formatDistance(distance)}</Stat>
+            <span className="inline-flex items-baseline gap-1">
+              <StarIcon className="h-4 w-4 translate-y-0.5 self-center text-star" />
+              <span className="sr-only">評価</span>
+              <span className="num text-xl font-bold leading-none text-text">{cafe.rating.toFixed(1)}</span>
+              {cafe.userRatingCount != null && (
+                <span className="num text-sm text-text-muted">
+                  ({cafe.userRatingCount}
+                  <span className="sr-only">件のクチコミ</span>)
+                </span>
+              )}
+            </span>
           )}
 
           {cafe.openNow !== undefined && (
-            <Stat
-              label={closingSoon !== null ? `あと${closingSoon}分で閉店` : openStatus ? `${openStatus.value}${openStatus.suffix}` : '営業状態'}
-              tone={cafe.openNow ? 'open' : 'closed'}
-              text
-            >
-              <span className={`h-2 w-2 rounded-full ${cafe.openNow ? 'bg-success' : 'bg-accent'}`} />
-              {cafe.openNow ? '営業中' : '時間外'}
-            </Stat>
+            <span className={`inline-flex items-center gap-1.5 text-[15px] font-bold ${cafe.openNow && closingSoon === null ? 'text-success-text' : 'text-accent-text'}`}>
+              <span className={`h-2 w-2 rounded-full ${cafe.openNow && closingSoon === null ? 'bg-success' : 'bg-accent'}`} />
+              {closingSoon !== null ? (
+                <span>
+                  あと<span className="num">{closingSoon}</span>分で閉店
+                </span>
+              ) : (
+                <>
+                  {cafe.openNow ? '営業中' : '営業時間外'}
+                  {openStatus && (
+                    <span className="font-medium text-text-muted">
+                      <span className="num">{openStatus.value}</span>
+                      {openStatus.suffix}
+                    </span>
+                  )}
+                </>
+              )}
+            </span>
           )}
-        </dl>
+        </p>
+
+        {(categoryLabel || priceLabel || distance != null) && (
+          <p className="mt-1.5 flex flex-wrap gap-x-2 text-sm text-text-muted">
+            {categoryLabel && <span>{categoryLabel}</span>}
+            {priceLabel && <span className="num">{priceLabel}</span>}
+            {distance != null && (
+              <span>
+                <span className="num">{formatDistance(distance)}</span>
+                <span className="ml-1">
+                  徒歩<span className="num">{formatWalkingMinutes(distance)}</span>
+                </span>
+              </span>
+            )}
+          </p>
+        )}
 
         {/* アクション。主役は経路（Primary）。保存と共有は Secondary。 */}
         <div className="mt-4 flex gap-2">
@@ -252,35 +273,6 @@ export default function CafeDetail({
         </div>
       </div>
     </article>
-  );
-}
-
-/** 評価・距離・営業状態を横に並べる 1 マス。数値が主、説明が従。 */
-function Stat({
-  label,
-  tone,
-  text = false,
-  children,
-}: {
-  label: string;
-  tone?: 'open' | 'closed';
-  /** 日本語の値（営業中 など）。数値用の書体を当てない。 */
-  text?: boolean;
-  children: React.ReactNode;
-}) {
-  const color = tone === 'open' ? 'text-success-text' : tone === 'closed' ? 'text-accent-text' : 'text-text';
-
-  return (
-    <div className="flex min-w-0 flex-1 flex-col items-center gap-1 px-2">
-      {/* 読み上げは「説明 → 値」の順にする（dt が先）。見た目は order で値を上に置く。 */}
-      <dt className="order-2 max-w-full truncate text-[11px] leading-none text-text-muted">
-        {/* 時刻や件数を含むので .num を当てる（日本語は M PLUS Rounded にフォールバックする） */}
-        <span className="num">{label}</span>
-      </dt>
-      <dd className={`order-1 flex items-center gap-1 leading-none ${color} ${text ? 'text-[15px] font-bold' : 'num text-xl font-bold'}`}>
-        {children}
-      </dd>
-    </div>
   );
 }
 

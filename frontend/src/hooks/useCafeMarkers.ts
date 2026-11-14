@@ -31,13 +31,16 @@ const clusterRenderer: Renderer = {
 
 const Z_INDEX: Record<PinState, number> = { default: 20, hover: 80, selected: 120 };
 
+/** 評価の札は丸いピンより手前に出す。札は地図の上で唯一の文字情報なので、丸に隠させない。 */
+const Z_INDEX_FEATURED = 40;
+
 type MarkerEntry = { marker: google.maps.Marker; data: PinData; state: PinState };
 
 function paint(entry: MarkerEntry): void {
     entry.marker.setIcon(createCafePinIcon(entry.data, entry.state));
     // label を消すときは null を渡す（undefined だと前の値が残る）。
     entry.marker.setLabel(createCafePinLabel(entry.data, entry.state));
-    entry.marker.setZIndex(Z_INDEX[entry.state]);
+    entry.marker.setZIndex(entry.state === 'default' && entry.data.featured ? Z_INDEX_FEATURED : Z_INDEX[entry.state]);
 }
 
 /**
