@@ -47,6 +47,12 @@ final class ScreenshotTests: XCTestCase {
         if savedByTest { save.tap(); sleep(1) }
         shot("\(scheme)-4-detail-saved")
 
+        // 写真を横にスワイプして 2 枚目を出す。
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.2))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.2)))
+        sleep(3)
+        shot("\(scheme)-4b-photo-swiped")
+
         app.swipeUp()
         sleep(1)
         shot("\(scheme)-5-detail-scrolled")
