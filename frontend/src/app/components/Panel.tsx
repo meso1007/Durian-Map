@@ -38,6 +38,8 @@ type Props = {
   onSearchArea: (area: string) => void;
   onRetry: () => void;
   onGoSearch: () => void;
+  /** 一覧の見出しの右に置く操作（友達に送る / すべて保存）。 */
+  listAction?: { label: string; onClick: () => void };
   onSelect: (id: string) => void;
   onToggleSave: (cafe: Cafe) => void;
   onSetStatus: (cafeId: string, status: SavedStatus) => void;
@@ -71,6 +73,7 @@ export default function Panel({
   onSearchArea,
   onRetry,
   onGoSearch,
+  listAction,
   onSelect,
   onToggleSave,
   onSetStatus,
@@ -127,6 +130,7 @@ export default function Panel({
                 showSort={filters.canSortByDistance && filters.cafes.length > 1 && !searchLoading}
                 sortByDistance={filters.sortByDistance}
                 onToggleSort={filters.toggleSort}
+                action={listAction}
               />
             }
             cafes={filters.cafes}

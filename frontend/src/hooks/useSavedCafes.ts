@@ -74,5 +74,24 @@ export function useSavedCafes({
         [savedCafes],
     );
 
-    return { savedCafes, toggleSave, setStatus, getStatus };
+    /** 複数の店をまとめて保存する（送られてきた一覧の「すべて保存」）。保存済みの店は飛ばす。 */
+    const saveMany = useCallback(
+        async (cafes: readonly Cafe[]) => {
+            const previous = savedCafes;
+            const savedAt = new Date().toISOString();
+            const added = cafes
+                .filter((cafe) => !previous.some((saved) => saved.id === cafe.id))
+                .map((cafe) => ({ ...cafe, status: 'want' as const, savedAt }));
+
+            if (added.length === 0) {
+                onNotice('すべて保存済みです');
+                return;
+            }
+
+            if (await persist([...previous, ...added], previous)) onNotice(`${added.length}軒を保存しました`);
+        },
+        [savedCafes, persist, onNotice],
+    );
+
+    return { savedCafes, toggleSave, setStatus, getStatus, saveMany };
 }

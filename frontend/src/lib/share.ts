@@ -59,3 +59,31 @@ export async function copyText(text: string): Promise<boolean> {
         return false;
     }
 }
+
+/**
+ * 文章と URL を共有する（保存した店の一覧を友達に送るとき）。
+ * 共有シートがあればそれを開き、無ければ「文章 + URL」をクリップボードへ入れる。
+ */
+export async function shareText(options: { title: string; text: string; url: string }): Promise<ShareResult> {
+    if (isNativePlatform()) {
+        const { Share } = await import('@capacitor/share');
+
+        try {
+            await Share.share(options);
+        } catch {
+            // ユーザーがシートを閉じた場合もここに来る。失敗として騒がない。
+        }
+        return 'shared';
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+        try {
+            await navigator.share(options);
+        } catch {
+            // 共有シートのキャンセル。
+        }
+        return 'shared';
+    }
+
+    return (await copyText(`${options.text}\n${options.url}`)) ? 'copied' : 'failed';
+}

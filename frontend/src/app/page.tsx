@@ -4,6 +4,8 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 
 import type { Cafe, Coordinates } from '@/lib/api';
 import { getMapInsets, getSheetHeights } from '@/lib/layout';
+import { shareText } from '@/lib/share';
+import { buildShareText, decodeSharedList, encodeSharedList, guessListTitle } from '@/lib/sharedList';
 import type { SheetSnap } from '@/lib/sheet';
 import { CAFE_PHOTO_TRANSITION, findCardPhoto, withViewTransition } from '@/lib/viewTransition';
 
@@ -47,7 +49,17 @@ function CafeFinderContent() {
   // ホームへ戻ったあとは、開いたときの URL の検索条件を引き継がない。
   const [wentHome, setWentHome] = useState(false);
   const fallbackQuery = wentHome ? null : initialUrl.query;
-  const urlState = { tab, query: query ?? fallbackQuery, cafeId: selectedId };
+
+  // 友達から送られた一覧（?list=…）。自分で検索するか、ホームへ戻るまで出しておく。
+  const [sharedList, setSharedList] = useState(() => decodeSharedList(initialUrl.list));
+  const showingShared = sharedList !== null && query === null && fallbackQuery === null;
+
+  const urlState = {
+    tab,
+    query: query ?? fallbackQuery,
+    cafeId: selectedId,
+    list: showingShared ? initialUrl.list : null,
+  };
 
   useSearchUrlState(urlState);
   useRestoreSearchFromUrl(initialUrl, search);
@@ -78,13 +90,13 @@ function CafeFinderContent() {
     ),
   });
 
-  const { savedCafes, toggleSave, setStatus, getStatus } = useSavedCafes({
+  const { savedCafes, toggleSave, setStatus, getStatus, saveMany } = useSavedCafes({
     onError: showError,
     onNotice: showNotice,
   });
   const savedIds = useMemo(() => new Set(savedCafes.map((cafe) => cafe.id)), [savedCafes]);
 
-  const filters = useCafeFilters({ tab, results, savedCafes, currentLocation });
+  const filters = useCafeFilters({ tab, results: showingShared ? sharedList.cafes : results, savedCafes, currentLocation });
   const selectedCafe = useSelectedCafe(selectedId, filters.cafes);
 
   // 共有 URL。検索条件がまだ無ければ、逆ジオで引いた地名で代用する。
@@ -98,7 +110,36 @@ function CafeFinderContent() {
   // 検索欄に出すエリア名。現在地からの検索に切り替えたら空にする（前のエリア名を残さない）。
   const shownQuery = query ?? fallbackQuery;
   const searchArea = shownQuery?.kind === 'area' ? shownQuery.area : '';
-  const searchTitle = query?.kind === 'nearby' ? 'この辺りのカフェ' : searchArea ? `${searchArea}のカフェ` : 'カフェ';
+  const searchTitle = showingShared
+    ? sharedList.title
+    : query?.kind === 'nearby'
+      ? 'この辺りのカフェ'
+      : searchArea
+        ? `${searchArea}のカフェ`
+        : 'カフェ';
+
+  /** 保存の一覧（いま絞り込んで見えている分）を、文章とリンクにして友達に送る。 */
+  const shareSavedList = useCallback(async () => {
+    const list = { title: guessListTitle(filters.cafes), cafes: filters.cafes };
+    const base = buildShareUrl({ tab: 'search', query: null, cafeId: null, list: encodeSharedList(list) });
+
+    const result = await shareText({
+      title: list.title,
+      text: buildShareText(list),
+      url: base ?? 'https://durian-map.pages.dev/',
+    });
+
+    if (result === 'copied') showNotice('一覧をコピーしました。貼り付けて送れます');
+    else if (result === 'failed') showError('共有できませんでした');
+  }, [filters.cafes, showNotice, showError]);
+
+  // 見出しの右の操作。保存の一覧では「友達に送る」、送られてきた一覧では「すべて保存」。
+  const listAction =
+    tab === 'saved' && filters.cafes.length > 0
+      ? { label: '友達に送る', onClick: () => void shareSavedList() }
+      : tab === 'search' && showingShared
+        ? { label: 'すべて保存', onClick: () => void saveMany(sharedList.cafes) }
+        : undefined;
 
   // カードに渡すコールバックを作り直さないよう、段と画面幅は ref で読む
   // （作り直すと、シートを動かすたびにカード 20 枚が再描画される）。
@@ -178,6 +219,7 @@ function CafeFinderContent() {
     clear();
     resetSearch();
     setWentHome(true);
+    setSharedList(null);
     setTab('search');
     setSnap('half');
   }, [clear, resetSearch]);
@@ -227,7 +269,7 @@ function CafeFinderContent() {
         onNotify={showNotice}
         context={{
           url: buildShareUrl(urlState) ?? 'https://durian-map.pages.dev/',
-          title: tab === 'saved' ? '保存したカフェ' : hasSearched ? searchTitle : null,
+          title: tab === 'saved' ? '保存したカフェ' : hasSearched || showingShared ? searchTitle : null,
           cafes: filters.cafes,
           selected: selectedCafe,
         }}
@@ -243,7 +285,7 @@ function CafeFinderContent() {
           recentAreas={recentAreas}
           isLocating={isLocating}
           isSearching={isLoading}
-          showLocate={hasSearched || tab === 'saved'}
+          showLocate={hasSearched || showingShared || tab === 'saved'}
           // 最重要 CTA（マンゴー）は 1 画面 1 つ。詳細では「ここへ行く」が主役なので、現在地ボタンは控えめにする。
           emphasizeLocate={tab === 'search' && selectedCafe === null}
           onLocate={locate}
@@ -268,9 +310,10 @@ function CafeFinderContent() {
             tab={tab}
             filters={filters}
             searchTitle={searchTitle}
-            hasSearched={hasSearched}
+            hasSearched={hasSearched || showingShared}
             isLoading={isLoading}
-            hasResults={results.length > 0}
+            // 送られてきた一覧には営業時間も価格帯も無いので、絞り込みは出さない。
+            hasResults={!showingShared && results.length > 0}
             errorMessage={searchState.status === 'error' ? searchState.message : null}
             searchToken={completedCount}
             currentLocation={currentLocation}
@@ -285,6 +328,7 @@ function CafeFinderContent() {
               if (query) void search(query);
             }}
             onGoSearch={() => handleTabChange('search')}
+            listAction={listAction}
             onSelect={handleSelectFromList}
             onToggleSave={(cafe: Cafe) => void toggleSave(cafe)}
             onSetStatus={(cafeId, status) => void setStatus(cafeId, status)}

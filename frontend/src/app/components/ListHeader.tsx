@@ -23,6 +23,8 @@ type Props = {
   onSavedFilterChange: (next: SavedFilter) => void;
   savedCounts: { all: number; want: number; visited: number };
   /** 並び替えは現在地が取れていて 2 件以上あるときだけ出す。 */
+  /** 見出しの右に置く操作（保存の一覧なら「友達に送る」）。押せば実際に何かが起きるものだけ。 */
+  action?: { label: string; onClick: () => void };
   showSort: boolean;
   sortByDistance: boolean;
   onToggleSort: () => void;
@@ -49,6 +51,7 @@ export default function ListHeader({
   showSort,
   sortByDistance,
   onToggleSort,
+  action,
 }: Props) {
   return (
     <div className="shrink-0 pb-2">
@@ -67,6 +70,16 @@ export default function ListHeader({
             <SortIcon />
             近い順
           </Chip>
+        )}
+
+        {action && (
+          <button
+            type="button"
+            onClick={action.onClick}
+            className="inline-flex h-9 shrink-0 items-center rounded-[10px] bg-primary px-3 text-sm font-medium text-white transition-colors duration-[var(--dm-duration-fast)] hover:bg-primary-deep"
+          >
+            {action.label}
+          </button>
         )}
       </div>
 
