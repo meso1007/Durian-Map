@@ -52,6 +52,10 @@ export default function WeekHours({ rows }: { rows: DayHours[] }) {
   const ticks = useMemo(() => {
     const values: number[] = [];
     for (let minutes = Math.ceil(axis.start / 360) * 360; minutes <= axis.end; minutes += 360) values.push(minutes);
+
+    // 深夜まで広げた軸は、端の時刻も出す（24 の先に何時まで続くのかが分かるように）。
+    // 直前の目盛りと近すぎるときは重なるので出さない。
+    if (axis.end - values[values.length - 1] >= 120) values.push(axis.end);
     return values;
   }, [axis]);
 
@@ -87,7 +91,15 @@ export default function WeekHours({ rows }: { rows: DayHours[] }) {
           ))}
         </div>
 
-        <div className="grid min-w-0 flex-1 grid-cols-7 gap-1.5">
+        <div className="relative grid min-w-0 flex-1 grid-cols-7 gap-1.5">
+          {/* 日付が変わる位置。深夜営業の店で、柱が 24 時の先まで伸びている理由が分かるようにする。 */}
+          {axis.end > 1440 && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 z-10 h-px bg-border"
+              style={{ top: `calc(6rem * ${(1440 - axis.start) / span})` }}
+            />
+          )}
           {days.map((day, index) => {
             const isSelected = index === selectedIndex;
 

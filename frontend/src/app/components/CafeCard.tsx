@@ -11,6 +11,7 @@ import type { SavedStatus } from '@/lib/storage';
 
 import { BookmarkIcon, CheckIcon, CupIcon, StarIcon } from './icons';
 import Photo from './Photo';
+import TodayBar from './TodayBar';
 
 type Props = {
   cafe: Cafe;
@@ -132,7 +133,15 @@ function CafeCard({ cafe, distance, savedStatus, now, index, onSelect }: Props) 
           </p>
         )}
 
-        <p className="mt-1 truncate text-xs leading-[1.5] text-text-muted">{formatAddress(cafe.address)}</p>
+        {/*
+          今日の営業時間の帯（6 時 → 24 時）。営業時間が取れない店だけ、代わりに住所を出す。
+          住所は詳細に必ず出る。一覧では「いつ開いているか」のほうが店どうしを見比べやすい。
+        */}
+        {cafe.weekdayDescriptions && cafe.weekdayDescriptions.length >= 7 ? (
+          <TodayBar weekdayDescriptions={cafe.weekdayDescriptions} now={now} />
+        ) : (
+          <p className="mt-1 truncate text-xs leading-[1.5] text-text-muted">{formatAddress(cafe.address)}</p>
+        )}
       </div>
     </button>
   );

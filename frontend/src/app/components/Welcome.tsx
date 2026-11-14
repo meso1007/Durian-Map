@@ -26,13 +26,13 @@ export default function Welcome({
   return (
     <div className="dm-scroll @container flex-1 overflow-y-auto px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-1 md:px-6 md:pt-3">
       {/*
-        コピーをこの画面の主役にする。1 行を幅いっぱいに使う大きさで、行の途中では折り返させない
+        コピーをこの画面の主役にする。2 行とも幅いっぱいに使う大きさで、行の途中では折り返させない
         （「チェーンじゃな / い、」のように割れると台無しになる）。幅は cqi（パネルの幅）に合わせる。
       */}
-      <h2 className="animate-rise whitespace-nowrap text-[min(10.2cqi,44px)] font-bold leading-[1.15] tracking-[-0.02em] text-text">
-        チェーンじゃない、
-        <br />
-        あの一杯へ。
+      <h2 className="animate-rise whitespace-nowrap font-bold leading-[1.12] tracking-[-0.02em] text-text">
+        <span className="block text-[min(10.4cqi,42px)]">チェーンじゃない、</span>
+        {/* 2 行目を主役にする。6 文字なので、同じ幅を使うと 1 行目の 1.5 倍の大きさになる。 */}
+        <span className="block text-[min(15.4cqi,62px)]">あの一杯へ。</span>
       </h2>
 
       <p className="mt-3 animate-rise text-[13px] leading-[1.6] text-text-muted [animation-delay:80ms]">
