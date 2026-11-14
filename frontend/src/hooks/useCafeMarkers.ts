@@ -112,6 +112,7 @@ export function useCafeMarkers({
 
         const added: google.maps.Marker[] = [];
         const removed: google.maps.Marker[] = [];
+        const selectedNew: google.maps.Marker[] = [];
 
         entries.forEach(({ marker }, id) => {
             if (nextIds.has(id)) return;
@@ -147,7 +148,7 @@ export function useCafeMarkers({
             entries.set(cafe.id, entry);
 
             // 選択中のピンはクラスタに入れず、地図へ直接置く（下の「選択とホバーの切り替え」を参照）。
-            if (entry.state === 'selected') entry.marker.setMap(map);
+            if (entry.state === 'selected') selectedNew.push(entry.marker);
             else added.push(entry.marker);
         });
 
@@ -157,6 +158,8 @@ export function useCafeMarkers({
         }
         if (added.length > 0) clusterer.addMarkers(added, true);
         if (removed.length > 0 || added.length > 0) clusterer.render();
+        // 選択中のピンは再描画のあとに置く（理由は下の「選択とホバーの切り替え」）。
+        selectedNew.forEach((marker) => marker.setMap(map));
         // 選択とホバーは下の effect が担当する（stateOf は ref を読むだけ）。
     }, [cafes, savedIds, map, isLoaded]);
 
@@ -167,6 +170,7 @@ export function useCafeMarkers({
         const sync = () => {
             const clusterer = clustererRef.current;
             let clusterChanged = false;
+            const detached: google.maps.Marker[] = [];
 
             entriesRef.current.forEach((entry, id) => {
                 const next = stateOf(id);
@@ -177,7 +181,7 @@ export function useCafeMarkers({
                 if (clusterer && map && (entry.state === 'selected') !== (next === 'selected')) {
                     if (next === 'selected') {
                         clusterer.removeMarker(entry.marker, true);
-                        entry.marker.setMap(map);
+                        detached.push(entry.marker);
                     } else {
                         entry.marker.setMap(null);
                         clusterer.addMarker(entry.marker, true);
@@ -190,6 +194,10 @@ export function useCafeMarkers({
             });
 
             if (clusterChanged) clusterer?.render();
+
+            // 地図へ置くのは、必ず再描画のあと。クラスタラは再描画のとき「前回は単独で出ていて、
+            // 今回の一覧に居ないピン」を地図から外すので、先に置くと、単独だった店を選んだときだけ消える。
+            detached.forEach((marker) => marker.setMap(map));
         };
 
         selectedIdRef.current = selectedId;
