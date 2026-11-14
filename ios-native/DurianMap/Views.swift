@@ -71,7 +71,11 @@ struct ContentView: View {
             Button { model.goHome() } label: { Image("BrandMark").resizable().scaledToFit().frame(width: 30, height: 30) }
                 .accessibilityLabel("最初の画面に戻る")
 
-            TextField("エリア・駅名でさがす", text: $searchText, prompt: Text("エリア・駅名でさがす").foregroundStyle(.primary.opacity(0.65)))
+            TextField("エリア・駅名でさがす", text: $searchText, prompt: Text(""))
+                .background(alignment: .leading) {
+                    // ガラスの上では prompt の色が薄く調色されて読めないので、普通の Text として重ねる。
+                    if searchText.isEmpty { Text("エリア・駅名でさがす").foregroundStyle(.primary.opacity(0.75)).allowsHitTesting(false).accessibilityHidden(true) }
+                }
                 .foregroundStyle(.primary)
                 .focused($searchFocused)
                 .submitLabel(.search)
@@ -170,7 +174,7 @@ struct PinView: View {
     let isSaved: Bool
 
     var body: some View {
-        let stroke: Color = cafe.openNow == nil ? Brand.pinText.opacity(0.6) : (cafe.openNow! ? Brand.pinOpen : Brand.pinClosed)
+        let stroke: Color = cafe.openNow == true ? Brand.pinOpen : Brand.pinMuted
         Group {
             if showsRating, let rating = cafe.rating {
                 Label(String(format: "%.1f", rating), systemImage: "star.fill")
@@ -188,7 +192,7 @@ struct PinView: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            if isSaved { Circle().fill(Brand.pinClosed).frame(width: 9, height: 9).offset(x: 3, y: -3) }
+            if isSaved { Circle().fill(Brand.pinSaved).frame(width: 9, height: 9).offset(x: 3, y: -3) }
         }
         .scaleEffect(isSelected ? 1.2 : 1, anchor: .bottom)
         // 押せる領域は 44pt を確保する。

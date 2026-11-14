@@ -44,7 +44,9 @@ enum Brand {
     /// 地図のピンの面。地図がダークでも沈まないよう、ピンは常に明るい面にする。
     static let pin = dynamic(0xFFFDF8, 0xFFF7E2)
     static let pinText = dynamic(0x1F3218, 0x17492E)
-    /// ピンの枠（営業中 / 営業時間外）。明るいピンの上なので、どちらのモードでも濃い色。
+    /// ピンの枠。営業中だけ緑、それ以外（営業時間外・不明）は無彩色に落として、開いている店を目立たせる。
     static let pinOpen = dynamic(0x14532D, 0x14532D)
-    static let pinClosed = dynamic(0xE2467C, 0xE2467C)
+    static let pinMuted = dynamic(0x9AA096, 0x9AA096)
+    /// 保存済みの印。地図の上でピンクが指すのはこれだけ。
+    static let pinSaved = dynamic(0xE2467C, 0xE2467C)
 }
