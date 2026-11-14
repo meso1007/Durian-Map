@@ -41,7 +41,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1F6B3F", // ヘッダーの --dm-primary に合わせる
+  themeColor: "#EEF5D9", // 画面の上端は地図。地図の陸地の色（--color-map-land）に合わせる
   width: "device-width",
   initialScale: 1,
   // maximumScale は指定しない。ピンチズームを塞ぐのは WCAG 1.4.4 違反で、

@@ -15,6 +15,10 @@ import type { Cafe } from './api';
 import { isNativePlatform } from './platform';
 
 const SAVED_CAFES_KEY = 'saved_cafes';
+const RECENT_AREAS_KEY = 'recent_areas';
+
+/** 最近の検索として覚えておく件数。初回表示のチップ 1 行に収まる数。 */
+const RECENT_AREAS_LIMIT = 5;
 
 /** 保存したカフェの状態。デザイン案の保存画面のセグメントに対応する。 */
 export type SavedStatus = 'want' | 'visited';
@@ -41,27 +45,27 @@ function getStore(): Storage | null {
  *
  * ネイティブ側は動的 import にして、Web のバンドルにプラグインを載せない。
  */
-async function readRaw(): Promise<string | null> {
+async function readRaw(key: string): Promise<string | null> {
     if (isNativePlatform()) {
         const { Preferences } = await import('@capacitor/preferences');
-        const { value } = await Preferences.get({ key: SAVED_CAFES_KEY });
+        const { value } = await Preferences.get({ key });
         return value;
     }
 
     const store = getStore();
-    return store ? store.getItem(SAVED_CAFES_KEY) : null;
+    return store ? store.getItem(key) : null;
 }
 
 /** 生の JSON 文字列を書く。 */
-async function writeRaw(value: string): Promise<void> {
+async function writeRaw(key: string, value: string): Promise<void> {
     if (isNativePlatform()) {
         const { Preferences } = await import('@capacitor/preferences');
-        await Preferences.set({ key: SAVED_CAFES_KEY, value });
+        await Preferences.set({ key, value });
         return;
     }
 
     const store = getStore();
-    store?.setItem(SAVED_CAFES_KEY, value);
+    store?.setItem(key, value);
 }
 
 /**
@@ -72,7 +76,7 @@ async function writeRaw(value: string): Promise<void> {
  */
 export async function loadSavedCafes(): Promise<SavedCafe[]> {
     try {
-        const raw = await readRaw();
+        const raw = await readRaw(SAVED_CAFES_KEY);
         if (!raw) return [];
 
         const parsed: unknown = JSON.parse(raw);
@@ -94,7 +98,7 @@ export async function loadSavedCafes(): Promise<SavedCafe[]> {
  */
 export async function saveSavedCafes(cafes: SavedCafe[]): Promise<boolean> {
     try {
-        await writeRaw(JSON.stringify(cafes));
+        await writeRaw(SAVED_CAFES_KEY, JSON.stringify(cafes));
         return true;
     } catch (error) {
         // QuotaExceededError、プライベートモードでの書き込み拒否など。
@@ -116,4 +120,42 @@ function migrate(value: Cafe & Partial<SavedCafe>): SavedCafe {
         status: value.status === 'visited' ? 'visited' : 'want',
         savedAt: typeof value.savedAt === 'string' ? value.savedAt : new Date(0).toISOString(),
     };
+}
+
+/**
+ * 最近検索したエリア名（新しい順）。初回表示で「前に探した場所」へ 1 タップで戻るために使う。
+ * 壊れたデータは空として扱う。
+ */
+export async function loadRecentAreas(): Promise<string[]> {
+    try {
+        const raw = await readRaw(RECENT_AREAS_KEY);
+        if (!raw) return [];
+
+        const parsed: unknown = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+
+        return parsed.filter((value): value is string => typeof value === 'string').slice(0, RECENT_AREAS_LIMIT);
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * 検索したエリア名を先頭に足した一覧を返す（同じ名前は 1 つにまとめる）。
+ * 保存に使う形をここで決めておくと、画面側と保存側で件数や順序がずれない。
+ */
+export function addRecentArea(areas: readonly string[], area: string): string[] {
+    const name = area.trim();
+    if (!name) return [...areas];
+
+    return [name, ...areas.filter((existing) => existing !== name)].slice(0, RECENT_AREAS_LIMIT);
+}
+
+/** 最近の検索を書き込む。失敗しても検索そのものには影響しないので、黙って諦める。 */
+export async function saveRecentAreas(areas: readonly string[]): Promise<void> {
+    try {
+        await writeRaw(RECENT_AREAS_KEY, JSON.stringify(areas));
+    } catch {
+        // 履歴は「あると嬉しい」だけの情報。保存できなくても操作は止めない。
+    }
 }

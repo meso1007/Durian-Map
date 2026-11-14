@@ -159,3 +159,30 @@ export function SearchIcon({ className = 'w-5 h-5' }: IconProps) {
     </svg>
   );
 }
+
+export function ArrowLeftIcon({ className = 'w-5 h-5' }: IconProps) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 12H5M11 6l-6 6 6 6" />
+    </svg>
+  );
+}
+
+/** 経路案内（曲がる矢印）。 */
+export function DirectionsIcon({ className = 'w-5 h-5' }: IconProps) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 20v-6a4 4 0 014-4h10M15 6l4 4-4 4" />
+    </svg>
+  );
+}
+
+/** 最近の検索（時計まわりの矢印）。 */
+export function HistoryIcon({ className = 'w-4 h-4' }: IconProps) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 12a8 8 0 108-8 8 8 0 00-6.2 3M4 4v4h4" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l2.5 1.5" />
+    </svg>
+  );
+}

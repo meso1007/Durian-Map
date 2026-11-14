@@ -6,22 +6,29 @@ import { APIProvider, Map, Marker, useApiIsLoaded, useMap } from '@vis.gl/react-
 // 型の正は lib/api.ts（API のレスポンスと一致させる）
 import type { Cafe, Coordinates } from '@/lib/api';
 import { distanceBetween } from '@/lib/geo';
+import type { MapInsets } from '@/lib/layout';
 import { snapRadius } from '@/hooks/useCafeSearch';
 import type { SearchRadius } from '@/hooks/useCafeSearch';
 import { useCafeMarkers } from '@/hooks/useCafeMarkers';
 import { useMapCamera } from '@/hooks/useMapCamera';
 
-import { CURRENT_LOCATION_DOT, CURRENT_LOCATION_RING, MAP_STYLE } from './map/mapStyle';
+import MapFallback from './MapFallback';
+import { CURRENT_LOCATION_DOT, CURRENT_LOCATION_RING, MAP_BACKGROUND, MAP_STYLE } from './map/mapStyle';
 import { SearchIcon } from './icons';
 
 /** これ以上動かしたら「このエリアで再検索」を出す。 */
 const RESEARCH_THRESHOLD_METERS = 300;
 
-type Props = {
+/** 位置が分からないうちの初期表示（東京）。 */
+const DEFAULT_CENTER: Coordinates = { lat: 35.6762, lng: 139.6503 };
+
+export type MapViewProps = {
   cafes: Cafe[];
   selectedId: string | null;
+  savedIds: ReadonlySet<string>;
   currentLocation: Coordinates | null;
-  emphasizeCurrentLocation: boolean;
+  /** 地図のうち UI が覆っている帯。視点とピンの収め方に使う。 */
+  insets: MapInsets;
   /** 検索が完了するたびに変わる値。地図が「検索直後の視点」を覚え直す合図。 */
   searchToken: number;
   onSelectCafe: (id: string) => void;
@@ -31,46 +38,43 @@ type Props = {
   onError: (message: string) => void;
 };
 
-export default function MapView({
-  cafes,
-  selectedId,
-  currentLocation,
-  emphasizeCurrentLocation,
-  searchToken,
-  onSelectCafe,
-  onClearSelection,
-  onSearchThisArea,
-  onError,
-}: Props) {
+export default function MapView(props: MapViewProps) {
+  const { cafes, selectedId, savedIds, currentLocation, insets, searchToken, onSelectCafe, onClearSelection, onSearchThisArea, onError } = props;
+
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
-  const defaultCenter = currentLocation ?? { lat: 35.6762, lng: 139.6503 };
-  const defaultZoom = currentLocation ? 15 : 13;
+  const [failed, setFailed] = useState(false);
 
-  const handleApiError = useCallback(() => onError('地図を読み込めませんでした。'), [onError]);
+  const handleApiError = useCallback(() => {
+    setFailed(true);
+    onError('地図を読み込めませんでした。一覧からさがせます。');
+  }, [onError]);
 
-  if (!apiKey) {
+  // キーが無い・読み込みに失敗した。位置関係だけの代替表示に倒す（一覧と詳細は使える）。
+  if (!apiKey || failed) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-surface-sunken px-6 text-center text-sm leading-[1.6] text-text-muted">
-        マップを表示するには NEXT_PUBLIC_GOOGLE_MAPS_API_KEY を設定してください。
-      </div>
+      <MapFallback
+        cafes={cafes}
+        selectedId={selectedId}
+        savedIds={savedIds}
+        currentLocation={currentLocation}
+        insets={insets}
+        reason={apiKey ? 'load-error' : 'missing-key'}
+        onSelectCafe={onSelectCafe}
+        onClearSelection={onClearSelection}
+      />
     );
   }
 
   return (
     // version は固定する。既定の weekly は破壊的変更が黙って降ってくる。
-    <APIProvider apiKey={apiKey} version="quarterly" onError={handleApiError}>
+    <APIProvider apiKey={apiKey} version="quarterly" language="ja" region="JP" onError={handleApiError}>
       <Map
-        defaultCenter={defaultCenter}
-        defaultZoom={defaultZoom}
+        defaultCenter={currentLocation ?? DEFAULT_CENTER}
+        defaultZoom={currentLocation ? 15 : 13}
         styles={MAP_STYLE}
+        backgroundColor={MAP_BACKGROUND}
         disableDefaultUI
-        zoomControl={false}
-        mapTypeControl={false}
-        scaleControl={false}
-        streetViewControl={false}
-        rotateControl={false}
-        fullscreenControl={false}
-        cameraControl={false}
+        clickableIcons={false}
         keyboardShortcuts={false}
         gestureHandling="greedy"
         className="h-full w-full"
@@ -79,11 +83,12 @@ export default function MapView({
         <MapLayers
           cafes={cafes}
           selectedId={selectedId}
+          savedIds={savedIds}
           currentLocation={currentLocation}
-          emphasizeCurrentLocation={emphasizeCurrentLocation}
+          insets={insets}
           onSelectCafe={onSelectCafe}
         />
-        <ResearchPrompt searchToken={searchToken} onSearchThisArea={onSearchThisArea} />
+        <ResearchPrompt searchToken={searchToken} insets={insets} onSearchThisArea={onSearchThisArea} />
       </Map>
     </APIProvider>
   );
@@ -93,18 +98,13 @@ export default function MapView({
 function MapLayers({
   cafes,
   selectedId,
+  savedIds,
   currentLocation,
-  emphasizeCurrentLocation,
+  insets,
   onSelectCafe,
-}: {
-  cafes: Cafe[];
-  selectedId: string | null;
-  currentLocation: Coordinates | null;
-  emphasizeCurrentLocation: boolean;
-  onSelectCafe: (id: string) => void;
-}) {
-  useMapCamera({ cafes, selectedId, currentLocation, emphasizeCurrentLocation });
-  useCafeMarkers({ cafes, selectedId, onSelectCafe });
+}: Pick<MapViewProps, 'cafes' | 'selectedId' | 'savedIds' | 'currentLocation' | 'insets' | 'onSelectCafe'>) {
+  useMapCamera({ cafes, selectedId, currentLocation, insets });
+  useCafeMarkers({ cafes, selectedId, savedIds, onSelectCafe });
 
   return <CurrentLocationMarker currentLocation={currentLocation} />;
 }
@@ -128,17 +128,15 @@ function CurrentLocationMarker({ currentLocation }: { currentLocation: Coordinat
  * 「このエリアで再検索」のピル。
  *
  * 検索直後の中心を基準に覚え、そこから 300m 以上動かしたら出す。
- * Google マップと同じ探索の流れ（動かす → その場所で探し直す）を作るためのもので、
  * 最重要 CTA（近くからさがす）とぶつからないよう Secondary の見た目にする
  * （最重要 CTA は 1 画面 1 つ / docs/design.md 1節）。
+ * 置く場所は、UI に覆われていない領域の上端の中央。
  */
 function ResearchPrompt({
   searchToken,
+  insets,
   onSearchThisArea,
-}: {
-  searchToken: number;
-  onSearchThisArea: (center: Coordinates, radius: SearchRadius) => void;
-}) {
+}: Pick<MapViewProps, 'searchToken' | 'insets' | 'onSearchThisArea'>) {
   const map = useMap();
   const [visible, setVisible] = useState(false);
   const baselineRef = useRef<Coordinates | null>(null);
@@ -171,48 +169,55 @@ function ResearchPrompt({
     return () => listener.remove();
   }, [map, searchToken]);
 
+  // 検索は 1 回以上済んでいること（初回表示では「再」検索にならない）。
+  if (!visible || searchToken === 0) return null;
+
   const handleClick = () => {
     const center = map?.getCenter();
     if (!map || !center) return;
 
     setVisible(false);
-    onSearchThisArea({ lat: center.lat(), lng: center.lng() }, viewportRadius(map));
+    onSearchThisArea({ lat: center.lat(), lng: center.lng() }, viewportRadius(map, insets));
   };
 
   return (
-    <>
-      {visible && (
-        <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-4">
-          <button
-            type="button"
-            onClick={handleClick}
-            className="pointer-events-auto inline-flex min-h-11 items-center gap-2 rounded-full border border-border bg-surface px-4 text-sm font-bold text-text shadow-card"
-          >
-            <SearchIcon className="w-4 h-4" />
-            このエリアで再検索
-          </button>
-        </div>
-      )}
-    </>
+    <div
+      className="pointer-events-none absolute z-20 flex justify-center px-4"
+      style={{ top: insets.top + 12, left: insets.left, right: insets.right }}
+    >
+      <button
+        type="button"
+        onClick={handleClick}
+        className="pointer-events-auto inline-flex min-h-11 animate-pop items-center gap-2 rounded-full bg-surface px-4 text-sm font-bold text-text shadow-float transition-transform duration-[var(--dm-duration-fast)] active:scale-95"
+      >
+        <SearchIcon className="h-4 w-4" />
+        このエリアで再検索
+      </button>
+    </div>
   );
 }
 
 /**
  * 表示中の範囲から検索半径を出す。
  *
- * 短辺の半分を採り、API が受け付ける値に丸める。長辺で採ると画面外まで
- * 検索してしまい、結果が地図に収まらない。
+ * UI に覆われていない領域の短辺の半分を採り、API が受け付ける値に丸める。
+ * 長辺や画面全体で採ると見えていない所まで検索してしまい、結果がパネルの下に入る。
  */
-function viewportRadius(map: google.maps.Map): SearchRadius {
+function viewportRadius(map: google.maps.Map, insets: MapInsets): SearchRadius {
   const bounds = map.getBounds();
   const center = map.getCenter();
   if (!bounds || !center) return snapRadius(1500);
 
   const ne = bounds.getNorthEast();
   const sw = bounds.getSouthWest();
+  const element = map.getDiv();
 
-  const width = distanceBetween({ lat: center.lat(), lng: sw.lng() }, { lat: center.lat(), lng: ne.lng() });
-  const height = distanceBetween({ lat: sw.lat(), lng: center.lng() }, { lat: ne.lat(), lng: center.lng() });
+  const fullWidth = distanceBetween({ lat: center.lat(), lng: sw.lng() }, { lat: center.lat(), lng: ne.lng() });
+  const fullHeight = distanceBetween({ lat: sw.lat(), lng: center.lng() }, { lat: ne.lat(), lng: center.lng() });
 
-  return snapRadius(Math.min(width, height) / 2);
+  // 画面全体の距離に「見えている割合」を掛ける。
+  const widthRatio = element.clientWidth > 0 ? Math.max(0.2, 1 - (insets.left + insets.right) / element.clientWidth) : 1;
+  const heightRatio = element.clientHeight > 0 ? Math.max(0.2, 1 - (insets.top + insets.bottom) / element.clientHeight) : 1;
+
+  return snapRadius(Math.min(fullWidth * widthRatio, fullHeight * heightRatio) / 2);
 }

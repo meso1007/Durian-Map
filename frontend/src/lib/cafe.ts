@@ -133,12 +133,69 @@ export function getOpenStatusLabel(cafe: Cafe): OpenStatusLabel | null {
     return null;
 }
 
+/** 価格帯の表示（「¥1,000〜2,000」）。priceLevel が取れない店は null。 */
+export function getPriceLabel(cafe: Cafe): string | null {
+    if (!cafe.priceLevel) return null;
+
+    return PRICE_FILTERS.find((filter) => filter.levels.some((level) => level === cafe.priceLevel))?.label ?? null;
+}
+
 /**
- * 営業状態をカードの枠線色にする。地図ピンの枠色と同じ意味で使う。
- * 枠線は非テキスト要素なので -500 系をそのまま使ってよい（必要な比は 3:1）。
- * → docs/design-tokens.md「営業状態の表現」
+ * 表示用の住所。
+ *
+ * Places の formattedAddress は「日本、〒153-0051 東京都目黒区…」のように国名と郵便番号から始まる。
+ * どちらも店を選ぶ判断には効かず、幅の狭いカードでは肝心の町名を押し出してしまうので落とす。
  */
-export function openStatusBorder(openNow?: boolean): string {
-    if (openNow === undefined) return 'border-border';
-    return openNow ? 'border-success' : 'border-accent';
+export function formatAddress(address: string): string {
+    return address
+        .replace(/^日本[、,]\s*/, '')
+        .replace(/〒?\s*\d{3}-\d{4}\s*/, '')
+        .trim();
+}
+
+/**
+ * 営業時間の 1 行を時刻の表記に直す（「14時00分～3時00分」→「14:00–3:00」）。
+ * 「定休日」「24 時間営業」のように時刻を含まない行はそのまま返す。
+ */
+export function formatHours(hours: string): string {
+    return hours
+        .replace(/(\d{1,2})時(\d{2})分/g, '$1:$2')
+        .replace(/\s*[～〜~]\s*/g, '–')
+        .replace(/\s*,\s*/g, '、')
+        .replace(/24\s*時間営業/, '24時間営業')
+        .trim();
+}
+
+export type DayHours = {
+    /** 「月」〜「日」。 */
+    day: string;
+    hours: string;
+    isToday: boolean;
+    /** 定休日など、その日は開かない。 */
+    isClosed: boolean;
+};
+
+const DAY_LABELS = ['月', '火', '水', '木', '金', '土', '日'] as const;
+
+/**
+ * 曜日別の営業時間を表にできる形へ直す。7 要素そろっていなければ null。
+ *
+ * weekdayDescriptions は**月曜始まり**。`today` は JS の Date（日曜始まり）なので添字を変換する。
+ * `today` を引数に取るのはテストで日付を固定するため。
+ */
+export function getWeekHours(weekdayDescriptions?: string[], today: Date = new Date()): DayHours[] | null {
+    if (!weekdayDescriptions || weekdayDescriptions.length < 7) return null;
+
+    const todayIndex = (today.getDay() + 6) % 7;
+
+    return DAY_LABELS.map((day, index) => {
+        const hours = formatHours(weekdayDescriptions[index].replace(/^[^:：]+[:：]\s*/, ''));
+
+        return { day, hours, isToday: index === todayIndex, isClosed: !/\d/.test(hours) };
+    });
+}
+
+/** Google マップの経路案内を開く URL。出発地は Google マップ側が現在地で補う。 */
+export function getCafeDirectionsUrl(cafe: Cafe): string {
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(cafe.name)}&destination_place_id=${encodeURIComponent(cafe.id)}`;
 }

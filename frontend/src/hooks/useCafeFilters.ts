@@ -8,7 +8,7 @@ import type { PriceFilterId } from '@/lib/cafe';
 import { getDistanceMeters } from '@/lib/geo';
 import type { SavedCafe, SavedStatus } from '@/lib/storage';
 
-import type { TabId } from '@/app/components/TabBar';
+import type { TabId } from '@/app/components/ViewSwitch';
 
 export type SavedFilter = 'all' | SavedStatus;
 
@@ -41,6 +41,11 @@ export function useCafeFilters({
             setPriceFilters((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id])),
         [],
     );
+
+    const clearFilters = useCallback(() => {
+        setOpenNowOnly(false);
+        setPriceFilters([]);
+    }, []);
 
     // 現在地が無ければ距離が出せないので、並び替えも成立しない。
     const canSortByDistance = currentLocation !== null;
@@ -79,6 +84,7 @@ export function useCafeFilters({
         toggleOpenNow,
         priceFilters,
         togglePrice,
+        clearFilters,
         savedFilter,
         setSavedFilter,
         sortByDistance,

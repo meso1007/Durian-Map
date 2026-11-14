@@ -1,11 +1,11 @@
 {
     "name": "Durian Map",
     "short_name": "Durian",
-    "description": "脱チェーン店の個人カフェ発掘マップ",
+    "description": "チェーン店を除いて、個人経営の小さなカフェだけを地図でさがせます。",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#FFF7E6",
-    "theme_color": "#1F6B3F",
+    "theme_color": "#EEF5D9",
     "icons": [
         {
             "src": "/logo-192.png",

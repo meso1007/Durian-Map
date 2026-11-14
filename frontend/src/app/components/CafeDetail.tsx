@@ -1,28 +1,31 @@
 'use client';
 
-import Image from 'next/image';
 import { useEffect, useRef } from 'react';
 
 import { getCafePhotoUrl } from '@/lib/api';
 import type { Cafe } from '@/lib/api';
 import {
+  formatAddress,
+  getCafeDirectionsUrl,
   getCafeDomain,
   getCafeMapUrl,
   getCategoryLabel,
   getOpenStatusLabel,
-  getTodayHours,
+  getPriceLabel,
+  getWeekHours,
   parseCafeWebsite,
 } from '@/lib/cafe';
+import type { DayHours } from '@/lib/cafe';
 import { formatDistance, formatWalkingMinutes } from '@/lib/geo';
 import { shareUrl } from '@/lib/share';
 import type { SavedStatus } from '@/lib/storage';
 
-import OpenStatusBadge from './OpenStatusBadge';
+import BrandMark from './BrandMark';
 import {
+  ArrowLeftIcon,
   BookmarkIcon,
   ChevronRightIcon,
-  ClockIcon,
-  CloseIcon,
+  DirectionsIcon,
   LinkIcon,
   LocationIcon,
   PhoneIcon,
@@ -44,6 +47,16 @@ type Props = {
   onNotify: (message: string) => void;
 };
 
+const SAVED_STATUSES = [
+  { id: 'want', label: '行きたい' },
+  { id: 'visited', label: '訪問済み' },
+] as const;
+
+/**
+ * カフェの詳細。一覧と同じ場所に入れ替わりで出る（docs/design.md 4.5節）。
+ *
+ * 出すのは Places から実際に取れた値だけ。取れない項目は行ごと出さない。
+ */
 export default function CafeDetail({
   cafe,
   distance,
@@ -56,130 +69,133 @@ export default function CafeDetail({
 }: Props) {
   const isSaved = savedStatus !== undefined;
   const openStatus = getOpenStatusLabel(cafe);
-  const mapUrl = getCafeMapUrl(cafe);
   const website = parseCafeWebsite(cafe);
   const domain = getCafeDomain(cafe);
-  const photoUrl = getCafePhotoUrl(cafe);
-  const categoryLabel = getCategoryLabel(cafe.category);
-  const todayHours = getTodayHours(cafe.weekdayDescriptions);
+  const photoUrl = getCafePhotoUrl(cafe, 800);
+  const weekHours = getWeekHours(cafe.weekdayDescriptions);
+  const facts = [getCategoryLabel(cafe.category), getPriceLabel(cafe)].filter(Boolean);
 
   // 共有は lib/share.ts を通す（iOS ではネイティブの共有シートに差し替わる）。
   const handleShare = async () => {
     const result = await shareUrl({ title: cafe.name, url: shareTargetUrl });
 
     if (result === 'copied') {
-      onNotify('URLをコピーしました');
+      onNotify('リンクをコピーしました');
     } else if (result === 'failed') {
       onNotify('共有できませんでした');
     }
   };
 
-  // パネルが現れたらフォーカスを移す。移さないとキーボード / 読み上げの利用者は
+  // 詳細が現れたら見出しへフォーカスを移す。移さないとキーボード / 読み上げの利用者は
   // 「カードを押したのに何も起きていない」ように感じる。閉じたときの復帰は
   // 呼び出し側（useMapSelection の dismiss）が元のカードへ戻す。
-  const panelRef = useRef<HTMLElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const scrollRef = useRef<HTMLElement>(null);
   useEffect(() => {
-    panelRef.current?.focus({ preventScroll: true });
+    scrollRef.current?.scrollTo({ top: 0 });
+    headingRef.current?.focus({ preventScroll: true });
   }, [cafe.id]);
 
   return (
-    <section
-      ref={panelRef}
-      tabIndex={-1}
-      aria-label={`${cafe.name} の詳細`}
-      className="rounded-2xl border border-border bg-surface shadow-card overflow-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+    <article
+      ref={scrollRef}
+      aria-labelledby="cafe-detail-title"
+      className="dm-scroll absolute inset-0 z-10 animate-push overflow-y-auto bg-surface pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
     >
-      {photoUrl && (
-        <div className="relative h-32 w-full bg-surface-sunken">
-          <Image src={photoUrl} alt="" width={400} height={160} unoptimized className="h-full w-full object-cover" />
-        </div>
-      )}
-
-      <div className="p-4">
-        <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start gap-2">
-              <h2 className="flex-1 min-w-0 text-lg font-bold leading-[1.4] text-text">{cafe.name}</h2>
-              <OpenStatusBadge openNow={cafe.openNow} plain />
-            </div>
-
-            {(categoryLabel || distance != null) && (
-              <p className="mt-1 text-sm leading-[1.6] text-text-muted">
-                {categoryLabel}
-                {categoryLabel && distance != null && <span aria-hidden>　・　</span>}
-                {distance != null && (
-                  <>
-                    <span className="num">現在地から{formatDistance(distance)}</span>
-                    <span aria-hidden>　・　</span>
-                    <span className="num">徒歩{formatWalkingMinutes(distance)}</span>
-                  </>
-                )}
-              </p>
-            )}
-
-            {/* 営業中なら「21:00まで」、閉店中なら「8:00から」。 */}
-            {openStatus && (
-              <p className="mt-1 inline-flex items-center gap-1 text-sm leading-[1.6] text-text-muted">
-                <ClockIcon className="w-4 h-4" />
-                <span>
-                  <span className="num">{openStatus.value}</span>
-                  {openStatus.suffix}
-                </span>
-              </p>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="選択を解除"
-            className="h-11 w-11 -mr-2 -mt-2 shrink-0 flex items-center justify-center rounded-full text-text-muted"
-          >
-            <CloseIcon />
-          </button>
-        </div>
-
-        {cafe.rating != null && (
-          <div className="mt-3 flex items-center gap-2">
-            <span className="num text-2xl font-bold leading-none text-text">{cafe.rating.toFixed(1)}</span>
-            <RatingStars rating={cafe.rating} />
-            {cafe.userRatingCount != null && (
-              <span className="text-xs text-text-muted">
-                <span className="num">{cafe.userRatingCount}</span>件のクチコミ
-              </span>
-            )}
-          </div>
+      {/* 写真。無い店は面の色とマークで埋める（壊れた画像や空白にしない）。 */}
+      <div className="relative mx-3 flex aspect-[16/10] max-h-64 items-center justify-center overflow-hidden rounded-[20px] bg-surface-sunken md:mx-4">
+        {photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={photoUrl} alt={`${cafe.name} の写真`} decoding="async" className="h-full w-full animate-fade object-cover" />
+        ) : (
+          <BrandMark className="h-16 w-16 opacity-40" />
         )}
 
-        {/* アクション行（アイコン + ラベルの縦積みはここだけ / docs/design.md 5節） */}
-        <div className="mt-4 grid grid-cols-3 gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="一覧に戻る"
+          className="absolute left-2.5 top-2.5 flex h-11 w-11 items-center justify-center rounded-full bg-surface text-text shadow-card transition-transform duration-[var(--dm-duration-fast)] active:scale-95"
+        >
+          <ArrowLeftIcon />
+        </button>
+      </div>
+
+      <div className="px-5 pt-4 md:px-6">
+        <h2
+          id="cafe-detail-title"
+          ref={headingRef}
+          tabIndex={-1}
+          className="text-[22px] font-bold leading-[1.35] text-text focus-visible:outline-none"
+        >
+          {cafe.name}
+        </h2>
+
+        {facts.length > 0 && (
+          <p className="mt-1 text-sm text-text-muted">
+            {facts.map((fact, index) => (
+              <span key={fact}>
+                {index > 0 && <span aria-hidden> · </span>}
+                <span className={index === facts.length - 1 && getPriceLabel(cafe) ? 'num' : undefined}>{fact}</span>
+              </span>
+            ))}
+          </p>
+        )}
+
+        {/* 評価と距離。数値は Co Headline（.num）。 */}
+        <dl className="mt-4 flex divide-x divide-border rounded-2xl bg-surface-sunken py-3">
+          {cafe.rating != null && (
+            <Stat label={cafe.userRatingCount != null ? `${cafe.userRatingCount}件のクチコミ` : 'クチコミ'}>
+              <StarIcon className="h-4 w-4 text-star" />
+              {cafe.rating.toFixed(1)}
+            </Stat>
+          )}
+
+          {distance != null && (
+            <Stat label={`徒歩${formatWalkingMinutes(distance)}`}>{formatDistance(distance)}</Stat>
+          )}
+
+          {cafe.openNow !== undefined && (
+            <Stat
+              label={openStatus ? `${openStatus.value}${openStatus.suffix}` : '営業状態'}
+              tone={cafe.openNow ? 'open' : 'closed'}
+              text
+            >
+              <span className={`h-2 w-2 rounded-full ${cafe.openNow ? 'bg-success' : 'bg-accent'}`} />
+              {cafe.openNow ? '営業中' : '時間外'}
+            </Stat>
+          )}
+        </dl>
+
+        {/* アクション。主役は経路（Primary）。保存と共有は Secondary。 */}
+        <div className="mt-4 flex gap-2">
           <a
-            href={mapUrl}
+            href={getCafeDirectionsUrl(cafe)}
             target="_blank"
             rel="noopener noreferrer"
-            className="min-h-[56px] flex flex-col items-center justify-center gap-1 rounded-xl bg-primary text-white text-xs font-bold"
+            className="flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-primary text-sm font-bold text-white transition-colors duration-[var(--dm-duration-fast)] hover:bg-primary-deep"
           >
-            <LocationIcon className="w-5 h-5" />
-            地図でみる
+            <DirectionsIcon />
+            ここへ行く
           </a>
 
           <button
             type="button"
             onClick={onToggleSave}
             aria-pressed={isSaved}
-            className={`min-h-[56px] flex flex-col items-center justify-center gap-1 rounded-xl border text-xs font-bold ${isSaved ? 'border-accent bg-accent-soft text-accent-text' : 'border-border bg-surface text-text'}`}
+            className={`flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-xl border px-4 text-sm font-bold transition-colors duration-[var(--dm-duration-fast)] ${isSaved ? 'border-accent bg-accent-soft text-accent-text' : 'border-border bg-surface text-text hover:border-primary'}`}
           >
-            <BookmarkIcon filled={isSaved} className="w-5 h-5" />
+            <BookmarkIcon filled={isSaved} className="h-5 w-5" />
             {isSaved ? '保存済み' : '保存'}
           </button>
 
           <button
             type="button"
             onClick={handleShare}
-            className="min-h-[56px] flex flex-col items-center justify-center gap-1 rounded-xl border border-border bg-surface text-xs font-bold text-text"
+            aria-label="共有"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-text transition-colors duration-[var(--dm-duration-fast)] hover:border-primary"
           >
-            <ShareIcon className="w-5 h-5" />
-            シェア
+            <ShareIcon className="h-5 w-5" />
           </button>
         </div>
 
@@ -188,21 +204,14 @@ export default function CafeDetail({
           押せるのに効かない UI を作らないため（docs/design.md 1節）。
         */}
         {isSaved && (
-          <div className="mt-3 flex gap-2" role="group" aria-label="保存した状態">
-            {(
-              [
-                { id: 'want', label: '行きたい' },
-                { id: 'visited', label: '訪問済み' },
-              ] as const
-            ).map(({ id, label }) => (
+          <div role="group" aria-label="保存した状態" className="mt-2 grid animate-fade grid-cols-2 gap-1 rounded-xl bg-surface-sunken p-1">
+            {SAVED_STATUSES.map(({ id, label }) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => onSetStatus(id)}
                 aria-pressed={savedStatus === id}
-                className={`flex-1 min-h-11 rounded-xl border text-xs font-bold ${savedStatus === id
-                  ? 'border-primary bg-primary text-white'
-                  : 'border-border bg-surface text-text-muted'}`}
+                className={`h-10 rounded-lg text-[13px] font-bold transition-colors duration-[var(--dm-duration-fast)] ${savedStatus === id ? 'bg-surface text-text shadow-card' : 'text-text-muted hover:text-text'}`}
               >
                 {label}
               </button>
@@ -210,48 +219,88 @@ export default function CafeDetail({
           </div>
         )}
 
-        {/* 情報行（.pen の Info）。値が取れないフィールドは行ごと出さない。 */}
-        <div className="mt-4 divide-y divide-border border-t border-border">
-          <InfoRow icon={<LocationIcon className="w-[17px] h-[17px]" />} label="住所" href={mapUrl}>
-            {cafe.address}
+        {weekHours && <HoursTable rows={weekHours} />}
+
+        {/* 情報行。値が取れないフィールドは行ごと出さない。 */}
+        <div className="mt-5 divide-y divide-border border-y border-border">
+          <InfoRow icon={<LocationIcon className="h-[18px] w-[18px]" />} label="住所" href={getCafeMapUrl(cafe)}>
+            {formatAddress(cafe.address)}
           </InfoRow>
 
-          {todayHours && (
-            <InfoRow icon={<ClockIcon />} label="営業時間">
-              {todayHours}
-            </InfoRow>
-          )}
-
           {cafe.phone && (
-            <InfoRow icon={<PhoneIcon />} label="電話" href={`tel:${cafe.phone.replace(/[^0-9+]/g, '')}`}>
+            <InfoRow icon={<PhoneIcon className="h-[18px] w-[18px]" />} label="電話" href={`tel:${cafe.phone.replace(/[^0-9+]/g, '')}`}>
               <span className="num">{cafe.phone}</span>
             </InfoRow>
           )}
 
           {domain && website && (
-            <InfoRow icon={<LinkIcon className="w-[17px] h-[17px]" />} label="ウェブサイト" href={website.href}>
-              <span className="truncate block">{domain}</span>
+            <InfoRow icon={<LinkIcon className="h-[18px] w-[18px]" />} label="ウェブサイト" href={website.href}>
+              <span className="block truncate">{domain}</span>
             </InfoRow>
           )}
         </div>
       </div>
+    </article>
+  );
+}
+
+/** 評価・距離・営業状態を横に並べる 1 マス。数値が主、説明が従。 */
+function Stat({
+  label,
+  tone,
+  text = false,
+  children,
+}: {
+  label: string;
+  tone?: 'open' | 'closed';
+  /** 日本語の値（営業中 など）。数値用の書体を当てない。 */
+  text?: boolean;
+  children: React.ReactNode;
+}) {
+  const color = tone === 'open' ? 'text-success-text' : tone === 'closed' ? 'text-accent-text' : 'text-text';
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col items-center gap-1 px-2">
+      {/* 読み上げは「説明 → 値」の順にする（dt が先）。見た目は flex-col-reverse で値を上に置く。 */}
+      <dt className="order-2 max-w-full truncate text-[11px] leading-none text-text-muted">
+        {/* 時刻や件数を含むので .num を当てる（日本語は M PLUS Rounded にフォールバックする） */}
+        <span className="num">{label}</span>
+      </dt>
+      <dd className={`order-1 flex items-center gap-1 leading-none ${color} ${text ? 'text-[15px] font-bold' : 'num text-xl font-bold'}`}>
+        {children}
+      </dd>
+    </div>
+  );
+}
+
+/** 曜日別の営業時間。今日の行を強調する。 */
+function HoursTable({ rows }: { rows: DayHours[] }) {
+  return (
+    <section className="mt-5" aria-label="営業時間">
+      <h3 className="text-xs font-bold text-text-muted">営業時間</h3>
+      <table className="mt-2 w-full border-separate border-spacing-0 text-sm">
+        <tbody>
+          {rows.map(({ day, hours, isToday, isClosed }) => (
+            <tr key={day} className={isToday ? 'font-bold text-text' : 'text-text-muted'}>
+              <th
+                scope="row"
+                className={`w-12 rounded-l-lg py-1.5 pl-3 text-left font-[inherit] ${isToday ? 'bg-success-soft' : ''}`}
+              >
+                {day}
+                {isToday && <span className="sr-only">（今日）</span>}
+              </th>
+              <td className={`rounded-r-lg py-1.5 pr-3 text-right ${isToday ? 'bg-success-soft' : ''}`}>
+                <span className={isClosed ? undefined : 'num'}>{hours}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </section>
   );
 }
 
-function RatingStars({ rating }: { rating: number }) {
-  const filled = Math.round(rating);
-
-  return (
-    <span className="inline-flex items-center gap-0.5" aria-hidden>
-      {[1, 2, 3, 4, 5].map((i) => (
-        <StarIcon key={i} className={`w-4 h-4 ${i <= filled ? 'text-star' : 'text-border'}`} />
-      ))}
-    </span>
-  );
-}
-
-/** 詳細の情報行（.pen の Info Row）。href があればリンク、無ければただの行。 */
+/** 詳細の情報行。アイコン + ラベル + 値 + シェブロン。行全体がリンク。 */
 function InfoRow({
   icon,
   label,
@@ -260,34 +309,26 @@ function InfoRow({
 }: {
   icon: React.ReactNode;
   label: string;
-  href?: string;
+  href: string;
   children: React.ReactNode;
 }) {
-  const body = (
-    <>
-      <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-xl bg-surface-sunken text-primary">
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-[10px] leading-none text-text-muted">{label}</span>
-        <span className="block text-[13px] leading-[1.5] text-text mt-1">{children}</span>
-      </span>
-      {href && <ChevronRightIcon className="w-4 h-4 shrink-0 self-center text-text-muted" />}
-    </>
-  );
-
-  const className = 'flex items-center gap-3 py-2.5 min-h-11';
-
-  if (!href) {
-    return <div className={className}>{body}</div>;
-  }
-
   // tel: は同一タブで開く（新規タブを作っても発信画面に行かない端末がある）
   const external = href.startsWith('http');
 
   return (
-    <a href={href} className={className} {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
-      {body}
+    <a
+      href={href}
+      className="group flex min-h-14 items-center gap-3 py-2.5"
+      {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface-sunken text-primary">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11px] leading-none text-text-muted">{label}</span>
+        <span className="mt-1 block text-sm leading-[1.5] text-text">{children}</span>
+      </span>
+      <ChevronRightIcon className="h-4 w-4 shrink-0 text-text-muted transition-transform duration-[var(--dm-duration-fast)] group-hover:translate-x-0.5" />
     </a>
   );
 }
