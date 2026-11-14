@@ -94,6 +94,13 @@ export function useMapCamera({
             return;
         }
 
+        // 1 軒だけ（保存が 1 軒のときなど）を fitBounds に渡すと、1 点に合わせて最大まで拡大され、
+        // 道も地名も無い絵になる。店を選んだときと同じ寄せ方にする。
+        if (valid.length === 1 && !(state.includeCurrentLocation && state.currentLocation)) {
+            focusOn(map, toCoordinates(valid[0]), state.insets, FOCUS_ZOOM);
+            return;
+        }
+
         const bounds = new google.maps.LatLngBounds();
         if (state.includeCurrentLocation && state.currentLocation) bounds.extend(state.currentLocation);
         valid.forEach((cafe) => bounds.extend(toCoordinates(cafe)));
