@@ -1,3 +1,4 @@
+import CoreLocation
 import SwiftUI
 
 /// カフェの詳細。一覧と同じシートの中で入れ替わりで出る。
@@ -70,9 +71,36 @@ struct DetailView: View {
                     }
                     .pickerStyle(.segmented)
                 }
+
+                // 全面に広げたときの下の余白に、近くの別のカフェを並べる（検索結果の中から、この店に近い順）。
+                let nearby = nearbyCafes
+                if !nearby.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("近くのカフェ").font(.subheadline.weight(.semibold)).padding(.top, 8)
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible())], alignment: .leading, spacing: 16) {
+                            ForEach(nearby, id: \.cafe.id) { item in
+                                Button { model.selected = item.cafe } label: { NearbyTile(cafe: item.cafe, meters: item.meters) }
+                                    .buttonStyle(.plain).accessibilityIdentifier("nearby-tile")
+                            }
+                        }
+                    }
+                }
             }
             .padding(16)
         }
+    }
+
+    /// 検索結果のうち、この店から 1.5km 以内の店を近い順に 4 軒。写真は一覧と同じサイズ（200）を使う。
+    private var nearbyCafes: [(cafe: Cafe, meters: Double)] {
+        guard let here = cafe.coordinate else { return [] }
+        let origin = CLLocation(latitude: here.latitude, longitude: here.longitude)
+        return model.results
+            .filter { $0.id != cafe.id }
+            .compactMap { other in other.coordinate.map { (other, CLLocation(latitude: $0.latitude, longitude: $0.longitude).distance(from: origin)) } }
+            .filter { $0.1 <= 1500 }
+            .sorted { $0.1 < $1.1 }
+            .prefix(4)
+            .map { (cafe: $0.0, meters: $0.1) }
     }
 
     private func shortcut(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
@@ -85,6 +113,28 @@ struct DetailView: View {
                 .frame(width: 48, height: 48)
                 .glassEffect(.regular.interactive(), in: .circle)
             Text(label).font(.caption).foregroundStyle(.secondary)
+        }
+        .contentShape(.rect)
+    }
+}
+
+/// 近くのカフェのタイル。写真・店名・評価・この店からの距離。
+struct NearbyTile: View {
+    let cafe: Cafe
+    let meters: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            PhotoView(url: API.photoURL(cafe, size: 200))
+                .aspectRatio(4 / 3, contentMode: .fit)
+                .clipShape(.rect(cornerRadius: 12))
+            Text(cafe.name).font(.subheadline.weight(.medium)).lineLimit(1)
+            HStack(spacing: 8) {
+                if let rating = cafe.rating {
+                    Label(String(format: "%.1f", rating), systemImage: "star.fill").font(.caption.weight(.bold)).labelStyle(RatingLabelStyle())
+                }
+                Text(Format.distance(meters)).font(.caption).foregroundStyle(.secondary)
+            }
         }
         .contentShape(.rect)
     }

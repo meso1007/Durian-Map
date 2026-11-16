@@ -142,14 +142,18 @@ struct ContentView: View {
         Set(cafes.filter { $0.rating != nil }.sorted { ($0.rating!, $0.userRatingCount ?? 0) > ($1.rating!, $1.userRatingCount ?? 0) }.prefix(5).map(\.id))
     }
 
-    /// 結果全体が、シートに隠れていない上半分に収まるようにする。
+    /// 結果が、シートに隠れていない上半分に収まるようにする。
+    /// 離れた 1〜2 軒に合わせると地図が引きすぎるので、中心（中央値）に近い 7 割の店だけで範囲を決める。
     private func fit(_ cafes: [Cafe]) {
-        let points = cafes.compactMap(\.coordinate)
-        guard let first = points.first else { return }
+        let all = cafes.compactMap(\.coordinate)
+        guard !all.isEmpty else { return }
+        let median = CLLocation(latitude: all.map(\.latitude).sorted()[all.count / 2], longitude: all.map(\.longitude).sorted()[all.count / 2])
+        let keep = all.count <= 4 ? all.count : max(4, Int((Double(all.count) * 0.7).rounded()))
+        let points = all.sorted { CLLocation(latitude: $0.latitude, longitude: $0.longitude).distance(from: median) < CLLocation(latitude: $1.latitude, longitude: $1.longitude).distance(from: median) }.prefix(keep)
         let lats = points.map(\.latitude), lngs = points.map(\.longitude)
-        let latSpan = max((lats.max()! - lats.min()!) * 1.5, 0.008)
-        let lngSpan = max((lngs.max()! - lngs.min()!) * 1.5, 0.008)
-        let center = points.count == 1 ? first : CLLocationCoordinate2D(latitude: (lats.max()! + lats.min()!) / 2, longitude: (lngs.max()! + lngs.min()!) / 2)
+        let latSpan = max((lats.max()! - lats.min()!) * 1.4, 0.006)
+        let lngSpan = max((lngs.max()! - lngs.min()!) * 1.4, 0.006)
+        let center = CLLocationCoordinate2D(latitude: (lats.max()! + lats.min()!) / 2, longitude: (lngs.max()! + lngs.min()!) / 2)
         // 縦は 2.2 倍に取り、中心を下へずらす（画面の下半分はシートの下になるため）。
         withAnimation { camera = .region(MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: center.latitude - latSpan * 0.55, longitude: center.longitude),
@@ -211,7 +215,8 @@ struct SheetContent: View {
         @Bindable var model = model
 
         if let cafe = model.selected {
-            DetailView(cafe: cafe)
+            // 店が替わったら、スクロール位置と写真のページを最初に戻す。
+            DetailView(cafe: cafe).id(cafe.id)
         } else {
             VStack(spacing: 0) {
                 Picker("表示の切り替え", selection: $model.tab) {

@@ -43,7 +43,9 @@ final class ScreenshotTests: XCTestCase {
         sleep(4)
 
         let save = app.buttons["保存"]
-        let savedByTest = save.exists
+        // 前回のテストが途中で止まり、足した保存が残ったときは CLEAN_LEFTOVER=1 で外す
+        // （xcodebuild には TEST_RUNNER_CLEAN_LEFTOVER=1 として渡す）。
+        let savedByTest = save.exists || ProcessInfo.processInfo.environment["CLEAN_LEFTOVER"] == "1"
         if savedByTest { save.tap(); sleep(1) }
         shot("\(scheme)-4-detail-saved")
 
