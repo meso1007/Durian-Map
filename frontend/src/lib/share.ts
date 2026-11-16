@@ -46,3 +46,44 @@ export async function shareUrl(options: { title: string; url: string }): Promise
         return 'failed';
     }
 }
+
+/**
+ * 文字列をクリップボードへ入れる。成功したかどうかを返す（呼び出し側がトーストで伝える）。
+ * iOS の WebView でも navigator.clipboard は使える（ユーザー操作の中で呼ぶこと）。
+ */
+export async function copyText(text: string): Promise<boolean> {
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * 文章と URL を共有する（保存した店の一覧を友達に送るとき）。
+ * 共有シートがあればそれを開き、無ければ「文章 + URL」をクリップボードへ入れる。
+ */
+export async function shareText(options: { title: string; text: string; url: string }): Promise<ShareResult> {
+    if (isNativePlatform()) {
+        const { Share } = await import('@capacitor/share');
+
+        try {
+            await Share.share(options);
+        } catch {
+            // ユーザーがシートを閉じた場合もここに来る。失敗として騒がない。
+        }
+        return 'shared';
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+        try {
+            await navigator.share(options);
+        } catch {
+            // 共有シートのキャンセル。
+        }
+        return 'shared';
+    }
+
+    return (await copyText(`${options.text}\n${options.url}`)) ? 'copied' : 'failed';
+}

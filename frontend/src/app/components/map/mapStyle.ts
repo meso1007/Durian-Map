@@ -1,9 +1,16 @@
 /**
- * 地図の見た目。色の正は docs/design-tokens.md「地図スタイル」。
+ * Google マップの見た目。色の正は docs/design-tokens.md「地図スタイル」。
  *
  * ここだけ HEX を直接書いているのは、Google Maps の styles が CSS 変数を
  * 解釈できないため。トークン表の値をそのまま写すこと。
  */
+
+import type { Cafe } from '@/lib/api';
+
+import { PIN_SAVED_COLOR, getPinColors, showsRating } from './pinStyle';
+import type { PinState } from './pinStyle';
+
+export const MAP_BACKGROUND = '#EEF5D9';
 
 export const MAP_STYLE: google.maps.MapTypeStyle[] = [
     { elementType: 'geometry', stylers: [{ color: '#EEF5D9' }] },
@@ -34,51 +41,121 @@ export const MAP_STYLE: google.maps.MapTypeStyle[] = [
     { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
 ];
 
-export const MARKER_SIZE = 42;
-export const MARKER_SIZE_SELECTED = 52;
+/** ピンに必要な情報だけを抜いたもの。これが変わったときだけ描き直す。 */
+export type PinData = { rating?: number; openNow?: boolean; saved: boolean; featured: boolean };
 
-/**
- * 営業状態 → ピンの枠色。カードの枠線と同じ意味で使う。
- * → docs/design-tokens.md「営業状態の表現」
- */
-function statusRingColor(openNow?: boolean): string {
-    if (openNow === undefined) return '#FFFFFF';
-    // ピン本体が黄緑(#8FC63C)なので、営業中は --durian-green-900 まで落とさないと枠が埋もれる。
-    return openNow ? '#14532D' : '#E2467C'; // --durian-green-900 / --tropic-hibiscus-500
+export function toPinData(cafe: Cafe, saved: boolean, featured: boolean): PinData {
+    return { rating: cafe.rating, openNow: cafe.openNow, saved, featured };
 }
 
-/**
- * ピンを SVG の data URI として組み立てる。
- * 静的ファイルを状態の数だけ用意するより、枠色だけ差し替えるほうが増やしやすい。
- * 絵柄は従来の marker.svg（ドリアン）を踏襲。
- */
-function buildMarkerSvg(openNow: boolean | undefined, selected: boolean): string {
-    const ring = statusRingColor(openNow);
-    const body = selected ? '#F4D964' : '#8FC63C';
-    const seed = selected ? '#274017' : '#284117';
-    const spike = selected ? '#FFF8D5' : '#FFF2AE';
+export function samePinData(a: PinData, b: PinData): boolean {
+    return a.rating === b.rating && a.openNow === b.openNow && a.saved === b.saved && a.featured === b.featured;
+}
 
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-    <path d="M32 5 C19.3 5 9 15.3 9 28 C9 42.6 32 62.5 32 62.5 C32 62.5 55 42.6 55 28 C55 15.3 44.7 5 32 5 Z"
-          fill="${body}" stroke="${ring}" stroke-width="4" stroke-linejoin="round"/>
-    <circle cx="32" cy="26" r="12" fill="${seed}"/>
-    <path d="M30.8 14.6C30.8 13.4 31.8 12.4 33 12.4H34.2V16H30.2L30.8 14.6Z" fill="${spike}"/>
-    <path d="M32 16L34.8 18.5L38.8 17.8L39.8 21.7L43.8 23.1L42.3 26.7L44.8 30L41.4 32.4L41 36.3L37 36.5L34.5 39.5L32 37.8L29.5 39.5L27 36.5L23 36.3L22.6 32.4L19.2 30L21.7 26.7L20.2 23.1L24.2 21.7L25.2 17.8L29.2 18.5L32 16Z" fill="${spike}"/>
+// 評価つきのピン: 角丸の札 + 下向きのしっぽ。星は SVG、数値は Marker の label で重ねる
+// （data URI の SVG はページのフォントを使えないので、Co Headline で出すには label が要る）。
+const PILL = { width: 58, height: 38, bodyHeight: 30 };
+// 評価の無い店: 小さな丸いピン。
+const DOT = { width: 18, height: 18 };
+
+const STAR_PATH = 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z';
+
+function savedBadge(x: number, fill: string): string {
+    return `<circle cx="${x}" cy="6" r="5" fill="${PIN_SAVED_COLOR}" stroke="${fill}" stroke-width="2"/>`;
+}
+
+function buildPillSvg(data: PinData, state: PinState): string {
+    const { fill, stroke, star } = getPinColors(data.openNow, state);
+    const { width, height, bodyHeight } = PILL;
+    const middle = width / 2;
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <path d="M${middle - 6} ${bodyHeight - 1} L${middle} ${height - 1} L${middle + 6} ${bodyHeight - 1} Z" fill="${fill}" stroke="${stroke}" stroke-width="2" stroke-linejoin="round"/>
+    <rect x="1" y="1" width="${width - 2}" height="${bodyHeight - 2}" rx="${(bodyHeight - 2) / 2}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+    <path d="M${middle - 5} ${bodyHeight - 2.2} L${middle + 5} ${bodyHeight - 2.2}" stroke="${fill}" stroke-width="2.4"/>
+    <g transform="translate(9 8.5) scale(0.56)"><path d="${STAR_PATH}" fill="${star}"/></g>
+    ${data.saved ? savedBadge(width - 8, fill) : ''}
   </svg>`;
 }
 
-export function createCafeMarkerIcon(
-    openNow: boolean | undefined,
-    selected: boolean,
-    sizeOverride?: number,
-): google.maps.Icon {
-    const size = sizeOverride ?? (selected ? MARKER_SIZE_SELECTED : MARKER_SIZE);
+function buildDotSvg(data: PinData, state: PinState): string {
+    const { fill, stroke } = getPinColors(data.openNow, state);
+    const { width, height } = DOT;
+    const middle = width / 2;
+
+    // 札にしない店は、地図を静かに保つために小さな二重丸にする（タップ領域は Marker 側で確保される）。
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <circle cx="${middle}" cy="${middle}" r="${middle - 1.5}" fill="${fill}" stroke="${stroke}" stroke-width="2.5"/>
+    <circle cx="${middle}" cy="${middle}" r="2.5" fill="${stroke}"/>
+    ${data.saved ? `<circle cx="${width - 4}" cy="4" r="3.5" fill="${PIN_SAVED_COLOR}" stroke="${fill}" stroke-width="1.5"/>` : ''}
+  </svg>`;
+}
+
+/** 選択中は 1.2 倍にする（しっぽの先を基準に拡大するので、指している位置は動かない）。 */
+function pinScale(state: PinState): number {
+    return state === 'selected' ? 1.2 : 1;
+}
+
+export function createCafePinIcon(data: PinData, state: PinState): google.maps.Icon {
+    const hasRating = showsRating(data.rating, data.featured, state);
+    const base = hasRating ? PILL : DOT;
+    const scale = pinScale(state);
+    const width = base.width * scale;
+    const height = base.height * scale;
 
     return {
-        url: `data:image/svg+xml,${encodeURIComponent(buildMarkerSvg(openNow, selected))}`,
-        scaledSize: new google.maps.Size(size, size),
-        anchor: new google.maps.Point(size / 2, size),
+        url: `data:image/svg+xml,${encodeURIComponent(hasRating ? buildPillSvg(data, state) : buildDotSvg(data, state))}`,
+        scaledSize: new google.maps.Size(width, height),
+        // 札はしっぽの先、丸いピンは中心が、その店の位置を指す。
+        anchor: new google.maps.Point(width / 2, hasRating ? height : height / 2),
+        // 数値は星の右。札の縦の中央に置く。
+        labelOrigin: new google.maps.Point(36 * scale, (PILL.bodyHeight / 2) * scale),
     };
+}
+
+let displayFontFamily: string | null = null;
+
+/**
+ * 数値用の書体（Co Headline）。next/font が付ける実際の family 名は CSS 変数から読む。
+ * Marker の label は CSS のクラスを当てられないので、名前で指定するしかない。
+ */
+function getDisplayFontFamily(): string {
+    if (displayFontFamily === null) {
+        const value = window.getComputedStyle(document.documentElement).getPropertyValue('--font-display').trim();
+        displayFontFamily = value ? `${value}, sans-serif` : 'sans-serif';
+    }
+
+    return displayFontFamily;
+}
+
+/** 評価の数値。評価の無い店は label を付けない。 */
+export function createCafePinLabel(data: PinData, state: PinState): google.maps.MarkerLabel | null {
+    if (data.rating == null || !showsRating(data.rating, data.featured, state)) return null;
+
+    return {
+        text: data.rating.toFixed(1),
+        color: getPinColors(data.openNow, state).text,
+        fontFamily: getDisplayFontFamily(),
+        fontSize: state === 'selected' ? '15px' : '13px',
+        fontWeight: '700',
+    };
+}
+
+/** クラスタ（近いピンをまとめた丸）。ライムの面に濃緑の数。 */
+export function createClusterIcon(): google.maps.Icon {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
+    <circle cx="22" cy="22" r="20" fill="#A8CF3B" stroke="#FFF7E6" stroke-width="3"/>
+  </svg>`;
+
+    return {
+        url: `data:image/svg+xml,${encodeURIComponent(svg)}`,
+        scaledSize: new google.maps.Size(44, 44),
+        anchor: new google.maps.Point(22, 22),
+    };
+}
+
+export function createClusterLabel(count: number): google.maps.MarkerLabel {
+    return { text: String(count), color: '#17492E', fontFamily: getDisplayFontFamily(), fontSize: '14px', fontWeight: '700' };
 }
 
 /** 現在地マーカーの二重丸。色は --tropic-lagoon-500。 */

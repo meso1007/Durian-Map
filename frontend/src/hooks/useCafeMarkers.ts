@@ -5,48 +5,61 @@ import { useEffect, useRef } from 'react';
 import { useApiIsLoaded, useMap } from '@vis.gl/react-google-maps';
 
 import type { Cafe } from '@/lib/api';
-import { createCafeMarkerIcon } from '@/app/components/map/mapStyle';
+import { getHoveredCafe, subscribeHoveredCafe } from '@/lib/hoverStore';
+import {
+    createCafePinIcon,
+    createCafePinLabel,
+    createClusterIcon,
+    createClusterLabel,
+    samePinData,
+    toPinData,
+} from '@/app/components/map/mapStyle';
+import type { PinData } from '@/app/components/map/mapStyle';
+import { getFeaturedIds } from '@/app/components/map/pinStyle';
+import type { PinState } from '@/app/components/map/pinStyle';
 
 const clusterRenderer: Renderer = {
     render({ count, position }) {
-        const svg = window.btoa(`
-      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-        <circle cx="32" cy="32" r="24" fill="#FFF7E6" />
-        <circle cx="32" cy="32" r="20" fill="#A8CF3B" />
-      </svg>
-    `);
-
         return new google.maps.Marker({
             position,
-            icon: {
-                url: `data:image/svg+xml;base64,${svg}`,
-                scaledSize: new google.maps.Size(56, 56),
-            },
-            label: { text: String(count), color: '#1F3218', fontSize: '13px', fontWeight: '700' },
+            icon: createClusterIcon(),
+            label: createClusterLabel(count),
             zIndex: 1000 + count,
         });
     },
 };
 
-const Z_INDEX_DEFAULT = 20;
-const Z_INDEX_SELECTED = 120;
+const Z_INDEX: Record<PinState, number> = { default: 20, hover: 80, selected: 120 };
 
-type MarkerEntry = { marker: google.maps.Marker; openNow?: boolean };
+/** 評価の札は丸いピンより手前に出す。札は地図の上で唯一の文字情報なので、丸に隠させない。 */
+const Z_INDEX_FEATURED = 40;
+
+type MarkerEntry = { marker: google.maps.Marker; data: PinData; state: PinState };
+
+function paint(entry: MarkerEntry): void {
+    entry.marker.setIcon(createCafePinIcon(entry.data, entry.state));
+    // label を消すときは null を渡す（undefined だと前の値が残る）。
+    entry.marker.setLabel(createCafePinLabel(entry.data, entry.state));
+    entry.marker.setZIndex(entry.state === 'default' && entry.data.featured ? Z_INDEX_FEATURED : Z_INDEX[entry.state]);
+}
 
 /**
  * カフェのピン。
  *
- * id をキーに差分だけ更新する。以前は結果や選択が変わるたびに全マーカーを
- * 破棄・再生成していて、20 件で目に見えて点滅し、WebView ではタップが遅れていた。
- * 選択の切り替えでは該当する 2 個の setIcon / setZIndex しか触らない。
+ * id をキーに差分だけ更新する。結果や選択が変わるたびに全マーカーを作り直すと、
+ * 20 件で目に見えて点滅し、WebView ではタップが遅れる。
+ * 選択やホバーの切り替えで触るのは、状態が変わったピンだけ。
  */
 export function useCafeMarkers({
     cafes,
     selectedId,
+    savedIds,
     onSelectCafe,
 }: {
     cafes: Cafe[];
     selectedId: string | null;
+    /** 保存済みのカフェ。ピンの右上に印を付ける。 */
+    savedIds: ReadonlySet<string>;
     onSelectCafe: (id: string) => void;
 }) {
     const map = useMap();
@@ -54,13 +67,18 @@ export function useCafeMarkers({
 
     const clustererRef = useRef<MarkerClusterer | null>(null);
     const entriesRef = useRef(new Map<string, MarkerEntry>());
-    const appliedSelectionRef = useRef<string | null>(null);
 
-    // クリックのたびに effect を作り直さないよう、最新のハンドラだけ持つ。
+    // クリックのたびに effect を作り直さないよう、最新の値だけ ref に持つ。
     const onSelectRef = useRef(onSelectCafe);
+    const selectedIdRef = useRef(selectedId);
     useEffect(() => {
         onSelectRef.current = onSelectCafe;
-    }, [onSelectCafe]);
+        selectedIdRef.current = selectedId;
+    }, [onSelectCafe, selectedId]);
+
+    /** いまの選択とホバーから、そのピンの状態を決める。選択がホバーより優先。 */
+    const stateOf = (id: string): PinState =>
+        id === selectedIdRef.current ? 'selected' : id === getHoveredCafe() ? 'hover' : 'default';
 
     useEffect(() => {
         if (!map || !isLoaded) return;
@@ -79,11 +97,10 @@ export function useCafeMarkers({
                 marker.setMap(null);
             });
             entries.clear();
-            appliedSelectionRef.current = null;
         };
     }, [map, isLoaded]);
 
-    // 結果の差分を反映する。
+    // 結果・保存状態の差分を反映する。
     useEffect(() => {
         const clusterer = clustererRef.current;
         if (!map || !isLoaded || !clusterer) return;
@@ -91,9 +108,11 @@ export function useCafeMarkers({
         const entries = entriesRef.current;
         const valid = cafes.filter((cafe) => cafe.lat != null && cafe.lng != null);
         const nextIds = new Set(valid.map((cafe) => cafe.id));
+        const featuredIds = getFeaturedIds(valid);
 
         const added: google.maps.Marker[] = [];
         const removed: google.maps.Marker[] = [];
+        const selectedNew: google.maps.Marker[] = [];
 
         entries.forEach(({ marker }, id) => {
             if (nextIds.has(id)) return;
@@ -105,29 +124,32 @@ export function useCafeMarkers({
 
         valid.forEach((cafe) => {
             const position = { lat: cafe.lat!, lng: cafe.lng! };
+            const data = toPinData(cafe, savedIds.has(cafe.id), featuredIds.has(cafe.id));
             const existing = entries.get(cafe.id);
 
             if (existing) {
-                // 同じ店でも営業状態は検索のたびに変わりうる。変わったときだけ描き直す。
-                if (existing.openNow !== cafe.openNow) {
-                    existing.marker.setIcon(createCafeMarkerIcon(cafe.openNow, cafe.id === selectedId));
-                    existing.openNow = cafe.openNow;
+                // 同じ店でも営業状態や保存は変わりうる。変わったときだけ描き直す。
+                if (!samePinData(existing.data, data)) {
+                    existing.data = data;
+                    paint(existing);
                 }
                 existing.marker.setPosition(position);
                 return;
             }
 
-            const isSelected = cafe.id === selectedId;
-            const marker = new google.maps.Marker({
-                position,
-                title: cafe.name,
-                icon: createCafeMarkerIcon(cafe.openNow, isSelected),
-                zIndex: isSelected ? Z_INDEX_SELECTED : Z_INDEX_DEFAULT,
-            });
+            const entry: MarkerEntry = {
+                marker: new google.maps.Marker({ position, title: cafe.name }),
+                data,
+                state: stateOf(cafe.id),
+            };
+            paint(entry);
 
-            marker.addListener('click', () => onSelectRef.current(cafe.id));
-            entries.set(cafe.id, { marker, openNow: cafe.openNow });
-            added.push(marker);
+            entry.marker.addListener('click', () => onSelectRef.current(cafe.id));
+            entries.set(cafe.id, entry);
+
+            // 選択中のピンはクラスタに入れず、地図へ直接置く（下の「選択とホバーの切り替え」を参照）。
+            if (entry.state === 'selected') selectedNew.push(entry.marker);
+            else added.push(entry.marker);
         });
 
         if (removed.length > 0) {
@@ -136,31 +158,51 @@ export function useCafeMarkers({
         }
         if (added.length > 0) clusterer.addMarkers(added, true);
         if (removed.length > 0 || added.length > 0) clusterer.render();
-        // selectedId は新規マーカーの初期アイコンにしか使わない。
-        // 選択の切り替えは下の effect が担当する。
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [cafes, map, isLoaded]);
+        // 選択中のピンは再描画のあとに置く（理由は下の「選択とホバーの切り替え」）。
+        selectedNew.forEach((marker) => marker.setMap(map));
+        // 選択とホバーは下の effect が担当する（stateOf は ref を読むだけ）。
+    }, [cafes, savedIds, map, isLoaded]);
 
-    // 選択の切り替え。触るのは「前に選ばれていたピン」と「今選ばれたピン」だけ。
+    // 選択とホバーの切り替え。状態が変わったピンだけを描き直す。
     useEffect(() => {
         if (!isLoaded) return;
 
-        const entries = entriesRef.current;
-        const previousId = appliedSelectionRef.current;
-        if (previousId === selectedId) return;
+        const sync = () => {
+            const clusterer = clustererRef.current;
+            let clusterChanged = false;
+            const detached: google.maps.Marker[] = [];
 
-        const previous = previousId ? entries.get(previousId) : undefined;
-        if (previous) {
-            previous.marker.setIcon(createCafeMarkerIcon(previous.openNow, false));
-            previous.marker.setZIndex(Z_INDEX_DEFAULT);
-        }
+            entriesRef.current.forEach((entry, id) => {
+                const next = stateOf(id);
+                if (entry.state === next) return;
 
-        const current = selectedId ? entries.get(selectedId) : undefined;
-        if (current) {
-            current.marker.setIcon(createCafeMarkerIcon(current.openNow, true));
-            current.marker.setZIndex(Z_INDEX_SELECTED);
-        }
+                // 選択中のピンはクラスタから外して、地図へ直接置く。クラスタに入れたままだと、
+                // 近くの店と 1 つの丸にまとめられ、選んだ店がどれか分からなくなる。
+                if (clusterer && map && (entry.state === 'selected') !== (next === 'selected')) {
+                    if (next === 'selected') {
+                        clusterer.removeMarker(entry.marker, true);
+                        detached.push(entry.marker);
+                    } else {
+                        entry.marker.setMap(null);
+                        clusterer.addMarker(entry.marker, true);
+                    }
+                    clusterChanged = true;
+                }
 
-        appliedSelectionRef.current = selectedId;
-    }, [selectedId, cafes, isLoaded]);
+                entry.state = next;
+                paint(entry);
+            });
+
+            if (clusterChanged) clusterer?.render();
+
+            // 地図へ置くのは、必ず再描画のあと。クラスタラは再描画のとき「前回は単独で出ていて、
+            // 今回の一覧に居ないピン」を地図から外すので、先に置くと、単独だった店を選んだときだけ消える。
+            detached.forEach((marker) => marker.setMap(map));
+        };
+
+        selectedIdRef.current = selectedId;
+        sync();
+
+        return subscribeHoveredCafe(sync);
+    }, [selectedId, cafes, isLoaded, map]);
 }

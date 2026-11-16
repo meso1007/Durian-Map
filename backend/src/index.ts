@@ -35,6 +35,11 @@ const RADIUS_CHOICES = [500, 1000, 1500, 3000, 5000];
 /** 予算ブレーカの既定値。wrangler.jsonc の vars で上書きする。 */
 const FALLBACK_DAILY_SEARCH_BUDGET = 300;
 const FALLBACK_DAILY_PHOTO_BUDGET = 3000;
+/**
+ * 1 軒あたりに配る写真の上限。詳細でスワイプして見る分。
+ * 写真は 1 枚ごとに Places の課金対象なので、Places が返す最大 10 枚をそのまま配らない。
+ */
+const MAX_PHOTOS_PER_CAFE = 5;
 
 /** 写真バイナリの保持期間。Places のキャッシュ規約の上限が 30 日。 */
 const PHOTO_TTL_SECONDS = 60 * 60 * 24 * 30;
@@ -319,6 +324,7 @@ function toCachedCafe(category: string) {
         phone: place.nationalPhoneNumber,
         priceLevel: place.priceLevel,
         photoName: place.photos?.[0]?.name,
+        photoNames: place.photos?.slice(0, MAX_PHOTOS_PER_CAFE).map((photo) => photo.name),
     });
 }
 
@@ -333,12 +339,21 @@ async function toLeads(env: Env, cafes: CachedCafe[]): Promise<Lead[]> {
     const signingKey = isConfigured(env.PHOTO_SIGNING_KEY) ? env.PHOTO_SIGNING_KEY : null;
 
     return Promise.all(
-        cafes.map(async ({ periods, ...rest }) => ({
+        cafes.map(async ({ periods, photoNames, ...rest }) => ({
             ...rest,
             ...computeOpeningStatus(periods, now),
             photoSig:
                 signingKey && rest.photoName
                     ? await signPhotoName(signingKey, rest.photoName)
+                    : undefined,
+            photos:
+                signingKey && photoNames?.length
+                    ? await Promise.all(
+                          photoNames.map(async (name) => ({
+                              name,
+                              sig: await signPhotoName(signingKey, name),
+                          })),
+                      )
                     : undefined,
         })),
     );

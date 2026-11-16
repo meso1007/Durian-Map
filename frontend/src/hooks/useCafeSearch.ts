@@ -102,10 +102,19 @@ export function useCafeSearch(onError: (message: string) => void) {
         [onError],
     );
 
+    /** 検索していない状態へ戻す（ホームへ戻るとき）。進行中の検索は捨てる。 */
+    const reset = useCallback(() => {
+        abortRef.current?.abort();
+        generationRef.current += 1;
+        setQuery(null);
+        setState({ status: 'idle' });
+    }, []);
+
     return {
         state,
         query,
         search,
+        reset,
         completedCount,
         results: state.status === 'success' ? state.results : EMPTY_RESULTS,
         isLoading: state.status === 'loading',

@@ -15,6 +15,8 @@ export type SearchUrlState = {
     tab: 'search' | 'saved';
     query: SearchQuery | null;
     cafeId: string | null;
+    /** 友達から送られた一覧（lib/sharedList.ts の符号化済み文字列）。表示している間だけ URL に残す。 */
+    list?: string | null;
 };
 
 /** 座標は 3 桁（約 110m）で丸める。URL が読みやすくなり、キャッシュにも当たりやすい。 */
@@ -37,6 +39,8 @@ export function buildSearchParams(state: SearchUrlState): string {
         params.set('lng', String(roundCoord(state.query.coordinates.lng)));
         params.set('r', String(state.query.radius));
     }
+
+    if (state.list) params.set('list', state.list);
 
     if (state.cafeId) params.set('cafe', state.cafeId);
 
@@ -70,6 +74,7 @@ export function parseSearchParams(params: URLSearchParams): SearchUrlState {
         query,
         // `cafeId` は旧い共有リンクの形。後方互換で読むが、書き戻しは `cafe` に寄せる。
         cafeId: params.get('cafe') ?? params.get('cafeId'),
+        list: params.get('list'),
     };
 }
 
@@ -143,6 +148,12 @@ export function useRestoreSearchFromUrl(
         if (restored.current || !initial.query) return;
         restored.current = true;
         search(initial.query);
+
+        // 開発時の StrictMode は effect を「実行 → 後始末 → 再実行」する。後始末で useCafeSearch が
+        // 検索を中断するので、ここで印を戻しておかないと再実行で検索されず、読み込み中のまま止まる。
+        return () => {
+            restored.current = false;
+        };
     }, [initial, search]);
 }
 

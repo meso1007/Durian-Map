@@ -1,0 +1,54 @@
+# Durian Map のネイティブ iOS アプリ（SwiftUI）。`xcodegen generate` で DurianMap.xcodeproj を作る。
+# .xcodeproj は生成物なのでコミットしない（.gitignore）。
+#
+# Liquid Glass（iOS 26 のガラス調）を使うので、最低 OS は iOS 26。
+# バンドル ID は Capacitor 版（frontend/ios）と同じ。上書きインストールになり、保存したカフェを引き継ぐ。
+name: DurianMap
+options:
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+targets:
+  DurianMap:
+    type: application
+    platform: iOS
+    sources:
+      - DurianMap
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.durianmap.app
+        PRODUCT_NAME: DurianMap
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_CFBundleDisplayName: Durian Map
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: 近くのカフェをさがすために、現在地を使います。
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        CODE_SIGN_STYLE: Automatic
+  # 実機を操作して画面を撮るための UI テスト（見た目の確認用）。
+  DurianMapUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - DurianMapUITests
+    dependencies:
+      - target: DurianMap
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.durianmap.app.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic
+schemes:
+  DurianMap:
+    build:
+      targets:
+        DurianMap: all
+        DurianMapUITests: [test]
+    test:
+      targets:
+        - DurianMapUITests

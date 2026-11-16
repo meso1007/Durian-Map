@@ -9,7 +9,7 @@ import "./globals.css";
 // unicode-range に分割するので、既定の preload: true だと <link rel="preload"> が
 // 350 本以上出て初回の帯域を地図と検索 API から奪う（実測 5.3MB）。
 // display: 'swap' + fallback があれば、必要な範囲だけ遅れて読み込まれる。
-// ウェイトは実際に使っている 3 つだけ（font-normal / font-medium / font-bold）。
+// ウェイトは実際に使っている 3 つだけ（font-normal / font-medium / font-medium）。
 const rounded = M_PLUS_Rounded_1c({
   variable: "--font-sans",
   subsets: ["latin"],
@@ -30,18 +30,33 @@ const coHeadline = localFont({
   ],
 });
 
+const TITLE = "Durian Map";
+const DESCRIPTION = "個人経営のカフェを地図でさがせます。大手チェーンは表示しません。";
+
 export const metadata: Metadata = {
-  title: "Durian Map",
-  description: "スタバもドトールも飽きたあなたへ。個人経営や小さなお気に入りカフェを見つけるためのマップ。",
+  // 共有リンクの土台。OG の URL を絶対パスにするために要る。
+  metadataBase: new URL(process.env.NEXT_PUBLIC_WEB_BASE_URL || "https://durian-map.pages.dev"),
+  title: TITLE,
+  description: DESCRIPTION,
   manifest: "/manifest.json",
   appleWebApp: {
     title: "Durian Map",
     statusBarStyle: "default",
   },
+  openGraph: {
+    type: "website",
+    locale: "ja_JP",
+    siteName: "Durian Map",
+    title: TITLE,
+    description: DESCRIPTION,
+    url: "/",
+    images: [{ url: "/logo-512.png", width: 512, height: 512, alt: "Durian Map" }],
+  },
+  twitter: { card: "summary", title: TITLE, description: DESCRIPTION, images: ["/logo-512.png"] },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1F6B3F", // ヘッダーの --dm-primary に合わせる
+  themeColor: "#EEF5D9", // 画面の上端は地図。地図の陸地の色（--color-map-land）に合わせる
   width: "device-width",
   initialScale: 1,
   // maximumScale は指定しない。ピンチズームを塞ぐのは WCAG 1.4.4 違反で、

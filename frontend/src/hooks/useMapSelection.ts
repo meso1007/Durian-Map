@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Cafe } from '@/lib/api';
 
-/** 地図のピンから選んだのか、リストのカードから選んだのか。出す UI が変わる。 */
+/** 地図のピンから選んだのか、リストのカードから選んだのか。一覧をその店まで動かすかどうかが変わる。 */
 export type SelectionSource = 'map' | 'list';
 
 /** PC では地図とリストを同期させる（Tailwind の md と同じ 768px）。 */
@@ -22,16 +22,12 @@ function isDesktop(): boolean {
  */
 export function useMapSelection(initialSelectedId: string | null = null) {
     const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
-    const [selectionSource, setSelectionSource] = useState<SelectionSource | null>(
-        initialSelectedId ? 'list' : null,
-    );
 
     const listRef = useRef<HTMLDivElement>(null);
     const scrollTargetRef = useRef<string | null>(initialSelectedId);
 
     const select = useCallback((id: string, source: SelectionSource) => {
         setSelectedId(id);
-        setSelectionSource(source);
 
         // 地図から選んだとき、モバイルは地図上のカードで見せるのでリストは動かさない
         // （シートが半分閉じているのに裏でスクロールしても意味がない）。
@@ -40,7 +36,6 @@ export function useMapSelection(initialSelectedId: string | null = null) {
 
     const clear = useCallback(() => {
         setSelectedId(null);
-        setSelectionSource(null);
         scrollTargetRef.current = null;
     }, []);
 
@@ -57,7 +52,11 @@ export function useMapSelection(initialSelectedId: string | null = null) {
         // パネルが消えてカードが並び直るのを待ってからフォーカスする。
         window.requestAnimationFrame(() => {
             const card = listRef.current?.querySelector<HTMLElement>(`[data-id="${CSS.escape(previousId)}"]`);
-            card?.focus({ preventScroll: true });
+
+            // カードがもう無い（保存を解除した等）ときは、一覧そのものへ戻す。body に落とさない。
+            (card ?? listRef.current)?.focus({ preventScroll: true });
+            // 地図のピンから選んだ場合、一覧はその店まで動いていない。見える位置へ寄せる。
+            card?.scrollIntoView({ block: 'nearest' });
         });
     }, [selectedId, clear]);
 
@@ -74,7 +73,7 @@ export function useMapSelection(initialSelectedId: string | null = null) {
         scrollTargetRef.current = null;
     });
 
-    return { selectedId, selectionSource, listRef, select, clear, dismiss };
+    return { selectedId, listRef, select, clear, dismiss };
 }
 
 /**

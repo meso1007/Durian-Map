@@ -13,7 +13,8 @@
 | `--durian-green-500` | `#2E8B57` | ボタン hover、営業中ドット、リンク |
 | `--durian-lime-400` | `#A8CF3B` | ロゴ・果皮のライム、選択リング、クラスタ |
 | `--durian-lime-100` | `#E4F3BA` | 営業中バッジ背景、タグ背景（緑系） |
-| `--durian-cream-50` | `#FFF7E6` | 画面背景、ボトムシート、カード地 |
+| `--durian-paper-50` | `#FFFDF8` | パネル・シート・カードの面（2026-11-14 追加。面に色を付けない） |
+| `--durian-cream-50` | `#FFF7E6` | 地図のピンの面、スプラッシュ |
 | `--durian-cream-100` | `#FDF1D4` | 入力欄・チップ背景、区切り |
 | `--durian-cream-200` | `#F3E4B8` | 罫線、スケルトン、影付きカードの縁 |
 | `--durian-seed-900` | `#1F3218` | 本文テキスト（最濃） |
@@ -44,7 +45,7 @@
 | `--dm-info` | `--tropic-lagoon-500` | 位置情報・補助情報 |
 | `--dm-success` | `--durian-green-500` | 営業中、保存完了トースト |
 | `--dm-error` | `#C2410C` | エラートースト（クリーム地でコントラスト 5.6:1） |
-| `--dm-surface` | `--durian-cream-50` | 面 |
+| `--dm-surface` | `--durian-paper-50` `#FFFDF8` | 面（パネル・シート・カード）。紙の白 |
 | `--dm-border` | `--durian-cream-200` | 罫線 |
 | `--dm-text` | `--durian-seed-900` | 本文 |
 | `--dm-text-muted` | `--durian-seed-600` | サブテキスト |
@@ -87,19 +88,29 @@ iOS のアイコン / スプラッシュも同じ素材から起こす（`fronte
 
 ## 営業状態の表現
 
-バッジだけでなく、**カードの枠線と地図ピンの枠**でも営業状態を表す。
-枠線・ピン枠は非テキスト要素なので必要なコントラストは **3:1**（`-500` 系をそのまま使ってよい）。
-**文字には使わないこと** — 文字は下の「使用ルール」に従う。
+営業状態は、**カードと詳細では点 + 文字、地図ピンでは枠の色**で表す。
+点とピンの枠は非テキスト要素なので必要なコントラストは **3:1**（`-500` 系をそのまま使ってよい）。
+**文字には `-500` 系を使わないこと** — 文字は下の「使用ルール」に従う。
 
-| 状態 | バッジ | カード枠線 | 地図ピンの枠 |
+| 状態 | カード・詳細の点 | カード・詳細の文字 | 地図ピンの枠 |
 |---|---|---|---|
-| 営業中 (`openNow === true`) | lime-100 地 / `--dm-success-text` | `--dm-success` `#2E8B57` | `--durian-green-900` `#14532D` |
-| 準備中 (`openNow === false`) | hibiscus-100 地 / `--dm-accent-text` | `--tropic-hibiscus-500` `#E2467C` | 同左 |
-| 不明 (`undefined`) | 出さない | `--dm-border` | `#FFFFFF` |
+| 営業中 (`openNow === true`) | `--dm-success` `#2E8B57` | `--dm-success-text` | `--durian-green-900` `#14532D` |
+| 営業時間外 (`openNow === false`) | `--dm-accent` `#E2467C` | `--dm-accent-text` | `--tropic-hibiscus-500` `#E2467C` |
+| 不明 (`undefined`) | 出さない | 出さない | `--durian-seed-600` `#5C6B4A` |
 
-> ピンだけ濃い緑にしているのは、ピン本体が黄緑（`#8FC63C`）で `-500` の緑だと枠が埋もれるため。
-> 実装は `frontend/src/app/page.tsx` の `openStatusBorder()` と
-> `frontend/src/app/components/MapView.tsx` の `statusRingColor()`。
+> ピンだけ濃い緑にしているのは、ピンの面がクリームで `-500` の緑だと枠が細く見えるため。
+> 実装は `frontend/src/app/components/CafeCard.tsx` と `frontend/src/app/components/map/pinStyle.ts`。
+> 2026-11-14 までカードの枠線でも表していたが、やめた（理由は `design.md`「カード」）。
+
+## 影とモーション
+
+| トークン | 値 | 用途 |
+|---|---|---|
+| `--dm-shadow` | `0 2px 8px rgba(20, 83, 45, 0.08)` | パネルの中のカード・ボタン |
+| `--dm-shadow-float` | `0 10px 32px rgba(20, 83, 45, 0.18)` | 地図の上に浮く面だけ |
+| `--dm-duration-fast` / `-base` / `-slow` | 140ms / 260ms / 440ms | `design.md` 4.6節 |
+| `--dm-ease-out` | `cubic-bezier(0.22, 1, 0.36, 1)` | 既定のイージング |
+| `--dm-ease-in-out` | `cubic-bezier(0.65, 0, 0.35, 1)` | 位置が入れ替わるもの |
 
 ## 使用ルール
 

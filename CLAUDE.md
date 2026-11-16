@@ -20,11 +20,17 @@
 |---|---|---|---|
 | API | Cloudflare Workers / Hono v4 / Zod | `backend/` | https://durian-map-api.dailyreading.workers.dev |
 | フロント（Web） | Next.js 16（App Router / `output: 'export'`）/ React 19 / Tailwind v4 | `frontend/` | https://durian-map.pages.dev（Cloudflare Pages） |
-| iOS アプリ | Capacitor 8（同じ静的書き出しを WebView に同梱。依存は SPM） | `frontend/ios/` | ローカルビルドのみ |
+| iOS アプリ（ネイティブ） | SwiftUI / MapKit / iOS 26 以降（Liquid Glass）。`xcodegen` でプロジェクトを生成 | `ios-native/` | ローカルビルドのみ |
+| iOS アプリ（旧・Capacitor） | Capacitor 8（Web の静的書き出しを WebView に同梱）。ネイティブ版が置き換える | `frontend/ios/` | ローカルビルドのみ |
 | 外部 API | Google Places API (New) / Maps JavaScript API | — | — |
 | 永続化 | 端末内のみ（Web: localStorage / iOS: Capacitor Preferences）。DB なし | — | — |
 
-パッケージマネージャ・ランタイムは **Bun**。**iOS は Web と同じコードから作る**。iOS 用に UI を別実装しないこと。
+パッケージマネージャ・ランタイムは **Bun**。
+
+**iOS は 2026-11-14 からネイティブ（Swift）で別実装している**（`ios-native/`）。それまでの方針「iOS は Web と同じコードから作る」は
+ユーザーの判断で変えた。API は 1 つのままで、チェーン店の判定・検索・写真はすべて Worker が持つ。
+表示の規則（住所や営業時間の整形、共有リンクの形式、AI に渡すプロンプト）は `frontend/src/lib/` と `ios-native/DurianMap/Core.swift` の
+両方にあるので、**片方を変えたらもう片方も直す**。
 
 ## リクエストの流れ
 
@@ -66,8 +72,14 @@
 
 | ファイル | 役割 |
 |---|---|
-| `app/page.tsx` | 画面本体。状態は `useState` / `useEffect` のみ（状態ライブラリなし） |
-| `app/components/MapView.tsx` | 地図。`@vis.gl/react-google-maps` + `@googlemaps/markerclusterer`。ピンの枠色で営業状態を表す |
+| `app/page.tsx` | 画面の骨格。全面の地図の上に検索バーと本体（シート / パネル）を浮かせる。状態は hooks に分けてある（状態ライブラリなし） |
+| `app/components/Panel.tsx` | 本体の中身。初回表示（`Welcome`）/ 一覧（`ListHeader` + `CafeList`）/ 詳細（`CafeDetail`）のどれか 1 つ |
+| `app/components/Sheet.tsx` | 本体の面。モバイルは 3 段階のボトムシート、PC は左のパネル。位置は `globals.css` の `.dm-sheet` |
+| `app/components/MapView.tsx` | 地図。`@vis.gl/react-google-maps` + `@googlemaps/markerclusterer`。出せないときは `MapFallback` |
+| `app/components/map/` | 地図の見た目。`mapStyle.ts`（地図の色・ピンの SVG）と `pinStyle.ts`（ピンの色） |
+| `hooks/` | 検索・絞り込み・保存・選択・現在地・URL 同期・シートのドラッグ・地図のピンと視点 |
+| `lib/layout.ts` / `lib/sheet.ts` | 画面の寸法と「地図のどこが UI に覆われているか」、シートの段の計算 |
+| `lib/cafe.ts` / `lib/geo.ts` | Places の値を表示用に直す純関数（住所・営業時間・価格帯・距離） |
 | `lib/api.ts` | 検索 API クライアント。`Cafe` 型・`ApiError`・`getCafePhotoUrl()` |
 | `lib/storage.ts` | 保存済みカフェの永続化（`SavedCafe` = `Cafe` + `status` + `savedAt`）。Web は localStorage、iOS は Preferences |
 | `lib/geolocation.ts` | 現在地取得。Web は `navigator.geolocation`、iOS は Capacitor Geolocation |
@@ -86,15 +98,38 @@
 - 色は [docs/design-tokens.md](docs/design-tokens.md) が正。ハードコードの hex を新たに増やさない
 - ブランド素材の正は `designs/durian-map-tropical.pen`。SVG は `designs/pen-frame-to-svg.py` で起こす（手で描き足さない）
 - `places.ts` の `FIELD_MASK` を安易に増やさない（Places の課金ティアが上がる）
+- **地図に重ねる面を足したら `lib/layout.ts` の `getMapInsets()` を見直す**。地図は全面に敷いてあり、
+  視点の寄せ方・Google のロゴの位置・再検索の半径がすべてこの値で決まる。CSS 側の幅や高さ
+  （`page.tsx` の `md:w-[416px]`、`globals.css` の `.dm-sheet`）とそろっていないと、選んだ店がパネルの下に入る
+- 写真は 1 軒につき最大 5 枚（`index.ts` の `MAX_PHOTOS_PER_CAFE`）。1 枚ごとに課金されるので、増やさない。複数枚を使うのは iOS の詳細だけで、表示したページしか読み込まない
+- 写真のサイズは一覧 200 / 詳細 800 の 2 種類だけ（サイズごとに別キャッシュになり、Places の写真課金が増える）
 - 本番ビルドの `NEXT_PUBLIC_*` は `package.json` の `build:prod` で明示指定する（`.env.local` が優先されて localhost が焼き込まれるのを防ぐ）
+
+## ネイティブ iOS（`ios-native/`）
+
+| ファイル | 役割 |
+|---|---|
+| `project.yml` | `xcodegen generate` で `DurianMap.xcodeproj` を作る（生成物はコミットしない） |
+| `DurianMap/Core.swift` | モデル・API・表示用の整形・共有 / AI のプロンプト・現在地・画面の状態（`AppModel`） |
+| `DurianMap/Views.swift` | 全面の地図 + 検索バー + 標準のシート（一覧・初回表示） |
+| `DurianMap/Detail.swift` | 詳細。スクロールせず 1 画面に収める（写真のスワイプ・今日の営業時間 1 行・地図 / 電話 / サイト / 共有のボタン） |
+
+- ガラスは OS 標準の部品（シート・`.buttonStyle(.glass)`・`.glassEffect`）に任せる。自前で半透明やぼかしを再現しない
+- 色は `Brand`（`DurianMapApp.swift`）経由で使う。ライト / ダークで切り替わる。固定の濃緑を文字に使わない（ダークで読めない）
+- **見た目は実機で確認する**: `DurianMapUITests/ScreenshotTests.swift` がアプリを操作してスクリーンショットを残す。
+  `xcodebuild test … -resultBundlePath out.xcresult` → `xcrun xcresulttool export attachments --path out.xcresult --output-path shots`
+- 保存は UserDefaults の `CapacitorStorage.saved_cafes`。Capacitor 版と同じキー・同じ JSON なので、上書きインストールで引き継がれる
+- **地図は MapKit。Google Places のデータを Google 以外の地図に載せるのは Google の規約に反する**ので、
+  App Store に出す前に Google Maps SDK へ替えるか、データの取得元を替えること（2026-11-14 にユーザーが承知のうえで選択）
+- ビルド: `cd ios-native && xcodegen generate && xcodebuild -scheme DurianMap -destination 'id=<端末>' -allowProvisioningUpdates DEVELOPMENT_TEAM=<チーム ID> build`
 
 ## 検証
 
-自動テストは無い。変更後は最低限これを通す:
+変更後は最低限これを通す:
 
 ```bash
-cd backend  && bun run typecheck
-cd frontend && bun run lint && bun run build:prod
+cd backend  && bun run typecheck && bun run test
+cd frontend && bun run typecheck && bun run lint && bun run test && bun run build:prod
 cd frontend && bun run build:ios   # iOS を触ったとき（Xcode が要る）
 ```
 
